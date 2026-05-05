@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>Dashboard Analytics Pro - Luxalry</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="/assets/images/favicon_io/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { 'sans': ['Cairo', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        brand: {
+                            blue: '#1E3A8A',  // Royal Blue
+                            amber: '#F59E0B', // Amber/Gold
+                            dark: '#0f172a',  // Slate 900
+                            darker: '#020617' // Slate 950
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <script>
+        // Redirect to login if no token found
+        if (!localStorage.getItem('admin_token') && !localStorage.getItem('basic_cred') && !sessionStorage.getItem('escalation_token')) {
+            window.location.href = 'login';
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Glassmorphism Utilities - Updated for Blue Theme */
+        .glass {
+            background: rgba(30, 58, 138, 0.15);
+            /* Brand Blue Tint */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .glass-card {
+            background: rgba(15, 23, 42, 0.7);
+            /* Slate 900 with opacity */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Hide Scrollbar for clean mobile look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+
+<body class="bg-slate-950 text-slate-200 h-[100dvh] overflow-hidden selection:bg-brand-amber selection:text-white">
+
+    <!-- Main App Wrapper -->
+    <div id="dashboard-container" class="flex h-full w-full relative">
+
+        <!-- 1. Desktop Sidebar (Hidden on Mobile) -->
+        <aside id="desktop-sidebar"
+            class="hidden md:flex flex-col w-0 h-full bg-slate-900 border-l border-slate-800 z-50 transition-all duration-300 ease-in-out overflow-hidden">
+            <!-- Logo Area -->
+            <div class="p-6 flex items-center gap-3 border-b border-slate-800/50">
+                <div
+                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-blue-700 flex items-center justify-center shadow-lg shadow-brand-blue/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-white leading-tight">Luxalry</h1>
+                    <span class="text-xs text-brand-amber font-medium bg-brand-amber/10 px-2 py-0.5 rounded-full">Admin
+                        Pro</span>
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                <a href="#"
+                    class="flex items-center gap-3 px-4 py-3 bg-brand-blue/10 text-blue-400 rounded-xl border border-brand-blue/20 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                    <span class="font-medium">لوحة القيادة</span>
+                </a>
+
+                <!-- Desktop Action Buttons (Moved from Header) -->
+                <button id="export-pdf-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                        </path>
+                    </svg>
+                    <span>تصدير PDF</span>
+                </button>
+                <button id="export-dashboard-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                        </path>
+                    </svg>
+                    <span>تصدير التقرير الشامل PDF</span>
+                </button>
+                <button id="utm-builder-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    <span>منشئ الروابط</span>
+                </button>
+                <button id="campaign-manager-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 21v-8a2 2 0 012-2h14a2 2 0 012 2v8M3 21h18M3 21l8-8 8 8M3 11V9a2 2 0 012-2h14a2 2 0 012 2v2" />
+                    </svg>
+                    <span> تسجيل حملة جديدة</span>
+                </button>
+                <button id="record-spend-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>تسجيل مصروف</span>
+                </button>
+                <button id="manage-spend-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>إدارة المصاريف</span>
+                </button>
+                <button id="settings-btn-desktop"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        <circle cx="12" cy="12" r="3" stroke-width="1.5"></circle>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
+                    </svg>
+                    <span>الإعدادات</span>
+                </button>
+            </nav>
+
+            <!-- User Profile & Logout -->
+            <div class="p-4 border-t border-slate-800">
+                <button id="logout-btn-desktop"
+                    class="w-full flex items-center justify-between p-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-red-900/20 hover:text-red-400 transition-colors group">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">
+                            AD</div>
+                        <div class="text-right">
+                            <p class="text-sm font-medium group-hover:text-red-400">Admin</p>
+                            <p class="text-xs text-slate-500">تسجيل خروج</p>
+                        </div>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500 group-hover:text-red-400"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Mobile Sidebar Backdrop -->
+        <div id="mobile-sidebar-backdrop"
+            class="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 hidden transition-opacity duration-300 opacity-0">
+        </div>
+
+        <!-- Mobile Sidebar -->
+        <aside id="mobile-sidebar"
+            class="fixed top-0 bottom-16 right-0 w-72 bg-slate-900 border-l border-slate-800 z-50 transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl flex flex-col">
+            <!-- Logo & Close -->
+            <div class="p-6 flex items-center justify-between border-b border-slate-800/50">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-blue-700 flex items-center justify-center shadow-lg shadow-brand-blue/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h1 class="text-lg font-bold text-white">Luxalry</h1>
+                </div>
+                <button id="mobile-close-sidebar"
+                    class="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-lg transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Nav Links -->
+            <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                <a href="#"
+                    class="flex items-center gap-3 px-4 py-3 bg-brand-blue/10 text-blue-400 rounded-xl border border-brand-blue/20 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                    <span class="font-medium">لوحة القيادة</span>
+                </a>
+
+                <!-- Moved Buttons -->
+                <button id="mobile-export-pdf-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                        </path>
+                    </svg>
+                    <span>تصدير PDF</span>
+                </button>
+
+                <button id="mobile-export-dashboard-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-xl transition-all">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                        </path>
+                    </svg>
+                    <span>تصدير التقرير الشامل</span>
+                </button>
+            </nav>
+
+            <!-- Logout -->
+            <div class="p-4 border-t border-slate-800">
+                <button id="logout-btn-mobile"
+                    class="w-full flex items-center justify-between p-3 rounded-xl bg-slate-800 border border-slate-700 hover:bg-red-900/20 hover:text-red-400 transition-colors group">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">
+                            AD</div>
+                        <div class="text-right">
+                            <p class="text-sm font-medium group-hover:text-red-400">Admin</p>
+                            <p class="text-xs text-slate-500">تسجيل خروج</p>
+                        </div>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500 group-hover:text-red-400"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- 2. Main Content Area -->
+        <main class="flex-1 flex flex-col h-full relative overflow-hidden">
+
+            <!-- Mobile Header -->
+            <header class="md:hidden h-16 glass flex items-center justify-between px-4 z-30 shrink-0">
+                <div class="flex items-center gap-2">
+                    <!-- Hamburger Menu -->
+                    <button id="mobile-menu-btn"
+                        class="p-2 rounded-full bg-slate-800 border border-slate-700 text-white border border-slate-700 relative">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <div
+                        class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-blue to-blue-700 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <span class="font-bold text-lg">Luxalry</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="mobile-filter-toggle"
+                        class="p-2 rounded-full bg-slate-800 border border-slate-700 text-blue-400 border border-slate-700 relative">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        <span class="absolute top-0 right-0 w-2 h-2 bg-brand-amber rounded-full"></span>
+                    </button>
+                    <button id="refresh-btn"
+                        class="p-2 rounded-full bg-slate-800 border border-slate-700 text-blue-400 border border-slate-700 relative">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15" />
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Desktop Header (Search & Date) -->
+            <header
+                class="hidden md:flex h-16 bg-slate-900 border-b border-slate-800 items-center justify-between px-6 shrink-0">
+                <div class="flex items-center gap-4 w-1/3">
+                    <!-- Sidebar Toggle Button -->
+                    <button id="desktop-sidebar-toggle"
+                        class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <div class="relative w-full">
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                            class="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input id="search-input" type="text" placeholder="بحث سريع..."
+                            class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg py-2 pr-10 pl-4 text-sm focus:outline-none focus:border-brand-blue transition-colors">
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <!-- Feature Buttons (Hidden by default, shown via JS based on Role) -->
+                    <button id="desktop-filter-toggle"
+                        class="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        <span>تصفية متقدمة</span>
+                    </button>
+
+                    <!-- Debug Button -->
+                    <button onclick="window.dashboard.debugConnection()"
+                        class="p-2 text-slate-400 hover:text-white bg-red-900/20 border border-red-500/50 rounded-lg transition-colors"
+                        title="Debug Connection">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                        </svg>
+                    </button>
+
+                    <!-- Data Source Toggle -->
+                    <div class="flex items-center gap-2 bg-slate-800 border border-slate-700 p-1 rounded-lg">
+                        <select id="data-source-select"
+                            class="bg-transparent text-sm text-slate-400 border-none focus:ring-0 py-1 px-2 cursor-pointer">
+                            <option value="sheets" selected="true" style="background-color: #0f172a;" dir="ltr">Google
+                                Sheets 📊</option>
+                            <option value="supabase" style="background-color: #0f172a;" dir="ltr">Supabase ⚡</option>
+                        </select>
+                    </div>
+                    <!-- Refresh Button -->
+
+                    <button id="refresh-btn-desktop"
+                        class="p-2 text-slate-400 hover:text-white bg-slate-800 border border-slate-700 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors"
+                        title="تحديث البيانات">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15" />
+                        </svg>
+                    </button>
+                    <div
+                        class="flex items-center gap-2 bg-slate-800 border border-slate-700 p-1 rounded-lg border border-slate-700 hidden">
+                        <select id="date-filter-desktop"
+                            class="bg-transparent text-sm text-slate-400  border-none focus:ring-0 py-1 px-2 cursor-pointer">
+                            <option value="all">كل الأوقات</option>
+                            <option value="hour">آخر ساعة</option>
+                            <option value="day">آخر 24 ساعة</option>
+                            <option value="week">آخر 7 أيام</option>
+                            <option value="month">آخر 30 يوم</option>
+                            <option value="3month">آخر 3 أشهر</option>
+                            <option value="6month">آخر 6 أشهر</option>
+                            <option value="9month">آخر 9 أشهر</option>
+                            <option value="year">آخر سنة</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Scrollable Content -->
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 space-y-6">
+
+                <!-- Alert Container -->
+                <div id="dashboard-alert"
+                    class="hidden p-4 rounded-lg border border-l-4 mb-4 flex items-start gap-3 transition-all duration-300">
+                    <div id="dashboard-alert-icon" class="mt-0.5"></div>
+                    <div class="flex-1">
+                        <h3 id="dashboard-alert-title" class="font-bold text-sm mb-1"></h3>
+                        <p id="dashboard-alert-message" class="text-sm opacity-90"></p>
+                    </div>
+                    <button onclick="document.getElementById('dashboard-alert').classList.add('hidden')"
+                        class="opacity-50 hover:opacity-100 transition-opacity">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Metrics Grid -->
+                <!-- Welcome Message -->
+                <div id="welcome-message-container" class="hidden mb-6 animate-fade-in-up">
+                    <div
+                        class="glass-card p-6 rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-800/50 to-slate-900/50 relative overflow-hidden group">
+                        <!-- Decorative Background Glow -->
+                        <div
+                            class="absolute top-0 right-0 w-64 h-64 bg-brand-blue/10 rounded-full blur-3xl -mr-32 -mt-32 transition-opacity duration-700 group-hover:opacity-70">
+                        </div>
+
+                        <div
+                            class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                            <div class="flex items-center gap-4">
+                                <div id="welcome-icon-wrapper"
+                                    class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center shadow-lg">
+                                    <!-- Icon injected by JS -->
+                                </div>
+                                <div>
+                                    <h2 id="welcome-title"
+                                        class="text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400">
+                                        <!-- Greeting injected by JS -->
+                                    </h2>
+                                    <p id="welcome-subtitle" class="text-slate-400 text-sm mt-1">
+                                        نتمنى لك يوماً إنتاجياً رائعاً 🚀
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Date Display -->
+                            <div class="hidden md:block text-left">
+                                <p id="welcome-date" class="text-slate-300 font-medium font-mono text-lg"></p>
+                                <p id="welcome-time" class="text-slate-500 text-sm font-mono" dir="ltr"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <section id="metrics-section" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 hidden">
+                    <div id="metrics-cards" class="col-span-full grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+                        <!-- JS populated -->
+                    </div>
+                </section>
+
+                <!-- Charts Section -->
+                <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="glass-card rounded-2xl p-5">
+                        <h4 class="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-brand-blue"></span>
+                            اتجاه الإيرادات اليومي
+                        </h4>
+                        <div class="chart-container h-64"><canvas id="metrics-daily-revenue-chart"></canvas></div>
+                    </div>
+                    <div class="glass-card rounded-2xl p-5">
+                        <h4 class="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-brand-amber"></span>
+                            قمع المبيعات
+                        </h4>
+                        <div class="chart-container h-64">
+                            <canvas id="metrics-daily-funnel-chart"></canvas>
+                            <div id="metrics-daily-funnel-empty"
+                                class="hidden text-center text-slate-500 flex items-center justify-center h-full">
+                                لا توجد بيانات كافية
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Split Stats (Cards) -->
+                <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Revenue -->
+                    <div class="glass-card rounded-xl p-4 border-t-4 border-emerald-500">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">الإيرادات المالية
+                        </h3>
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="w-1/2 text-right border-l border-slate-700 pl-2">
+                                <div class="text-[10px] text-slate-500 mb-1">الإجمالي (Global)</div>
+                                <div id="revenue-stats-breakdown" class="text-2xl font-bold text-white">--</div>
+                            </div>
+                            <div class="filtered-stat-wrapper hidden w-1/2 text-right pr-2">
+                                <div class="text-[10px] text-emerald-400 mb-1">المفلتر (Filtered)</div>
+                                <div id="filtered-revenue-stats-breakdown" class="text-sm text-emerald-400">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Transactions -->
+                    <div class="glass-card rounded-xl p-4 border-t-4 border-blue-500">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">إجمالي المعاملات</h3>
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="w-1/2 text-right border-l border-slate-700 pl-2">
+                                <div class="text-[10px] text-slate-500 mb-1">الإجمالي (Global)</div>
+                                <div id="total-payments-stats" class="text-2xl font-bold text-white">--</div>
+                            </div>
+                            <div class="filtered-stat-wrapper hidden w-1/2 text-right pr-2">
+                                <div class="text-[10px] text-blue-400 mb-1">المفلتر (Filtered)</div>
+                                <div id="filtered-total-payments-stats" class="text-sm text-blue-400">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Paid -->
+                    <div class="glass-card rounded-xl p-4 border-t-4 border-emerald-500">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">عمليات ناجحة</h3>
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="w-1/2 text-right border-l border-slate-700 pl-2">
+                                <div class="text-[10px] text-slate-500 mb-1">الإجمالي (Global)</div>
+                                <div id="paid-payments-stats" class="text-2xl font-bold text-white">--</div>
+                            </div>
+                            <div class="filtered-stat-wrapper hidden w-1/2 text-right pr-2">
+                                <div class="text-[10px] text-emerald-400 mb-1">المفلتر (Filtered)</div>
+                                <div id="filtered-paid-payments-stats" class="text-sm text-emerald-400">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Pending -->
+                    <div class="glass-card rounded-xl p-4 border-t-4 border-brand-amber">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">عمليات معلقة</h3>
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="w-1/2 text-right border-l border-slate-700 pl-2">
+                                <div class="text-[10px] text-slate-500 mb-1">الإجمالي (Global)</div>
+                                <div id="pending-payments-stats" class="text-2xl font-bold text-white">--</div>
+                            </div>
+                            <div class="filtered-stat-wrapper hidden w-1/2 text-right pr-2">
+                                <div class="text-[10px] text-amber-400 mb-1">المفلتر (Filtered)</div>
+                                <div id="filtered-pending-payments-stats" class="text-sm text-amber-400">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Failed -->
+                    <div class="glass-card rounded-xl p-4 border-t-4 border-red-500">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">عمليات فاشلة</h3>
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="w-1/2 text-right border-l border-slate-700 pl-2">
+                                <div class="text-[10px] text-slate-500 mb-1">الإجمالي (Global)</div>
+                                <div id="failed-payments-stats" class="text-2xl font-bold text-white">--</div>
+                            </div>
+                            <div class="filtered-stat-wrapper hidden w-1/2 text-right pr-2">
+                                <div class="text-[10px] text-red-400 mb-1">المفلتر (Filtered)</div>
+                                <div id="filtered-failed-payments-stats" class="text-sm text-red-400">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Canceled -->
+                    <div class="glass-card rounded-xl p-4 border-t-4 border-slate-500">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">عمليات ملغية</h3>
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="w-1/2 text-right border-l border-slate-700 pl-2">
+                                <div class="text-[10px] text-slate-500 mb-1">الإجمالي (Global)</div>
+                                <div id="canceled-payments-stats" class="text-2xl font-bold text-white">--</div>
+                            </div>
+                            <div class="filtered-stat-wrapper hidden w-1/2 text-right pr-2">
+                                <div class="text-[10px] text-slate-400 mb-1">المفلتر (Filtered)</div>
+                                <div id="filtered-canceled-payments-stats" class="text-sm text-slate-400">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Distribution Charts -->
+                <section class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <div class="glass-card rounded-xl p-4">
+                        <h3 class="text-sm font-bold text-center mb-2">طرق الدفع</h3>
+                        <div class="h-48"><canvas id="payment-method-chart"></canvas></div>
+                    </div>
+                    <div class="glass-card rounded-xl p-4">
+                        <h3 class="text-sm font-bold text-center mb-2">حالة التوصيل</h3>
+                        <div class="h-48"><canvas id="status-chart"></canvas></div>
+                    </div>
+                    <div class="glass-card rounded-xl p-4">
+                        <h3 class="text-sm font-bold text-center mb-2">توزيع الكميات</h3>
+                        <div class="h-48"><canvas id="quantity-chart"></canvas></div>
+                    </div>
+                    <div class="glass-card rounded-xl p-4">
+                        <h3 class="text-sm font-bold text-center mb-2">اللغات</h3>
+                        <div class="h-48"><canvas id="language-chart"></canvas></div>
+                    </div>
+                </section>
+
+                <!-- Spend Management (Hidden by default) -->
+                <section id="spend-management-section"
+                    class="glass-card rounded-xl p-4 hidden border-t-4 border-brand-amber">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-amber-400">سجل المصاريف الإعلانية</h3>
+                        <p class="text-xs text-gray-500 mt-1">مراجعة وتعديل المصاريف المسجلة قبل اعتمادها في التقارير.
+                        </p>
+                        <button onclick="document.getElementById('spend-management-section').classList.add('hidden')"
+                            class="text-slate-400 hover:text-white"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M6 18L18 6M6 6l12 12" />
+                            </svg></button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-right">
+                            <thead
+                                class="hover:bg-slate-800 border border-slate-700/50 transition-colors border-b border-slate-700/50">
+                                <tr>
+                                    <th class="px-4 py-3">Date</th>
+                                    <th class="px-4 py-3">Campaigne</th>
+                                    <th class="px-4 py-3">Source</th>
+                                    <th class="px-4 py-3 text-center">Impressions</th>
+                                    <th class="px-4 py-3 text-center">Clics</th>
+                                    <th class="px-4 py-3 text-center">Dépenses</th>
+                                    <th class="px-4 py-3 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="spend-table-body" class="divide-y divide-slate-900"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Marketing Table -->
+                <section class="glass-card rounded-xl overflow-hidden">
+                    <div class="p-4 border-b border-slate-700 bg-slate-800 border border-slate-700/50">
+                        <h3 class="font-bold text-blue-400">أفضل الحملات التسويقية</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-right text-slate-300">
+                            <thead class="text-xs uppercase bg-slate-900/50 text-slate-500">
+                                <tr>
+                                    <th class="px-4 py-3">الحملة</th>
+                                    <th class="px-4 py-3 text-center">الطلبات <span
+                                            class="text-[9px] block text-slate-500 font-normal">(Traffic)</span></th>
+                                    <th class="px-4 py-3 text-center">المصاريف <span
+                                            class="text-[9px] block text-slate-500 font-normal">(CPC)</span></th>
+                                    <th class="px-4 py-3 text-center">الأداء <span
+                                            class="text-[9px] block text-slate-500 font-normal">(CPA)</span></th>
+                                    <th class="px-4 py-3 text-center text-emerald-500">ROAS</th>
+                                    <th class="px-4 py-3 text-center text-emerald-500">الإيرادات <span
+                                            class="text-[9px] block text-emerald-700 font-normal">(Net)</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="top-campaigns-body" class="divide-y divide-slate-800">
+                                <tr>
+                                    <td colspan="8" class="text-center p-4">جاري التحليل...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Ad Performance Table -->
+                <section class="glass-card rounded-xl overflow-hidden">
+                    <div class="p-4 border-b border-slate-700 bg-slate-800 border border-slate-700/50">
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-blue-400">تقرير كفاءة الإعلانات</h3>
+                            <button id="kpi-info-btn" class="text-slate-400 hover:text-blue-400 transition-colors"
+                                title="شرح المصطلحات">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-right text-slate-300">
+                            <thead class="text-xs uppercase bg-slate-900/50 text-slate-500">
+                                <tr>
+                                    <th class="px-4 py-3">CAMPAGNE</th>
+                                    <th class="px-4 py-3 text-center">IMPRESSIONS</th>
+                                    <th class="px-4 py-3 text-center">CPM</th>
+                                    <th class="px-4 py-3 text-center">Clics</th>
+                                    <th class="px-4 py-3 text-center">CTR</th>
+                                    <th class="px-4 py-3 text-center">CPC</th>
+                                    <th class="px-4 py-3 text-center">Dépenses</th>
+                                    <th class="px-4 py-3 text-center">COMMANDES<span
+                                            class="text-[9px] block text-slate-500 font-normal">(CPA/CVR)</span></th>
+                                    <th class="px-4 py-3 text-center text-emerald-500">FINANCIALS<span
+                                            class="text-[9px] block text-emerald-700 font-normal">(ROAS/Net)</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="ad-performance-body" class="divide-y divide-slate-800">
+                                <tr>
+                                    <td colspan="9" class="text-center p-4">جاري التحليل...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Products Stats -->
+                <section class="glass-card rounded-xl overflow-hidden">
+                    <div class="p-4 border-b border-slate-700 bg-slate-800 border border-slate-700/50">
+                        <h3 class="font-bold text-blue-400">إحصائيات الباقات (الكمية)</h3>
+                    </div>
+                    <div id="product-stats-container" class="grid grid-cols-1 md:grid-cols-4 gap-4 py-2 px-2">
+                        <p class="text-slate-200 text-center col-span-full">جاري التحميل...</p>
+                    </div>
+                </section>
+
+                <!-- Main Data Table -->
+                <section class="glass-card rounded-xl overflow-hidden mb-20 md:mb-0">
+                    <div
+                        class="p-4 border-b border-slate-700 bg-slate-800 border border-slate-700/50 flex flex-wrap items-center justify-between gap-4">
+                        <h3 class="font-bold text-blue-400">جدول المعاملات</h3>
+                        <div class="flex gap-2">
+                            <button id="add-btn"
+                                class="px-3 py-1.5 bg-brand-blue hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors">إضافة
+                                يدوية</button>
+                            <button id="bulk-invite-btn"
+                                class="hidden px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1">
+                                <span>دعوات جماعية</span>
+                                <span id="bulk-invite-count"
+                                    class="bg-white text-teal-600 px-1 rounded-full text-[10px]">0</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table id="data-table" class="w-full text-sm text-right text-slate-300">
+                            <thead class="bg-slate-900/50 text-slate-500 text-xs uppercase">
+                                <tr>
+                                    <th class="px-4 py-3">Date</th>
+                                    <th class="px-4 py-3">Statut</th>
+                                    <th class="px-4 py-3">Identifiants</th>
+                                    <th class="px-4 py-3">Client</th>
+                                    <th class="px-4 py-3">Téléphone</th>
+                                    <th class="px-4 py-3">المنتج (Produit)</th>
+                                    <th class="px-4 py-3 text-center">الكمية (Quantité)</th>
+                                    <th class="px-4 py-3">العنوان (Adresse)</th>
+                                    <th class="px-4 py-3">Campagne</th>
+                                    <th class="px-4 py-3">Montant</th>
+                                    <th class="px-4 py-3">Mode de paiement</th>
+                                    <th class="px-4 py-3">Dernière mise à jour</th>
+                                    <th class="px-4 py-3 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body" class="divide-y divide-slate-800">
+                                <!-- JS Populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Pagination -->
+                    <div class="p-4 border-t border-slate-700 flex justify-center gap-4">
+                        <button id="prev-page"
+                            class="px-3 py-1 bg-slate-800 border border-slate-700 rounded text-slate-300 hover:bg-slate-700 disabled:opacity-50">السابق</button>
+                        <span id="page-info" class="text-slate-400 text-sm py-1">1 / 1</span>
+                        <button id="next-page"
+                            class="px-3 py-1 bg-slate-800 border border-slate-700 rounded text-slate-300 hover:bg-slate-700 disabled:opacity-50">التالي</button>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+
+        <!-- 3. Mobile Bottom Navigation (Fixed) -->
+        <nav
+            class="md:hidden fixed bottom-0 left-0 w-full h-16 bg-slate-900/90 backdrop-blur-lg border-t border-slate-800 flex items-center justify-around z-50 pb-safe">
+
+            <!-- UTM Builder -->
+            <button id="mobile-utm-builder-btn"
+                class="flex flex-col items-center gap-1 text-slate-400 hover:text-blue-400 transition-colors group">
+                <div class="p-1.5 rounded-full group-hover:bg-brand-blue/10 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                </div>
+                <span class="text-[9px] font-medium">الروابط</span>
+            </button>
+
+            <!-- Campaigns -->
+            <button id="mobile-campaigns-btn"
+                class="flex flex-col items-center gap-1 text-slate-400 hover:text-blue-400 transition-colors group">
+                <div class="p-1.5 rounded-full group-hover:bg-brand-blue/10 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M3 21v-8a2 2 0 012-2h14a2 2 0 012 2v8M3 21h18M3 21l8-8 8 8M3 11V9a2 2 0 012-2h14a2 2 0 012 2v2" />
+                    </svg>
+                </div>
+                <span class="text-[9px] font-medium">الحملات</span>
+            </button>
+
+            <!-- Record Spend -->
+            <button id="mobile-record-spend-btn"
+                class="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-brand-amber text-white shadow-lg shadow-brand-amber/40 border-4 border-slate-900 hover:scale-105 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+            </button>
+
+            <!-- Manage Spend -->
+            <button id="mobile-manage-spend-btn"
+                class="flex flex-col items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors group">
+                <div class="p-1.5 rounded-full group-hover:bg-emerald-500/10 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </div>
+                <span class="text-[9px] font-medium">إدارة</span>
+            </button>
+
+            <!-- Settings -->
+            <button id="mobile-settings-btn"
+                class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors group">
+                <div class="p-1.5 rounded-full group-hover:bg-slate-700 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        <circle cx="12" cy="12" r="3" stroke-width="1.5"></circle>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
+                    </svg>
+                </div>
+                <span class="text-[9px] font-medium">الإعدادات</span>
+            </button>
+        </nav>
+
+        <!-- 4. Mobile Filter Sheet (Off-canvas) -->
+        <div id="filter-sheet" class="fixed inset-0 z-[60] hidden">
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                onclick="document.getElementById('filter-sheet').classList.add('hidden')"></div>
+            <div
+                class="absolute bottom-0 left-0 w-full md:w-96 md:left-auto md:right-0 md:h-full md:rounded-l-2xl md:rounded-tr-none bg-slate-900 rounded-t-2xl p-6 shadow-2xl transform transition-transform duration-300 ease-out">
+                <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-6 md:hidden"></div>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-white">تصفية البيانات</h3><button
+                        onclick="document.getElementById('filter-sheet').classList.add('hidden')"
+                        class="hidden md:block text-slate-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg"
+                            class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg></button>
+                </div>
+
+                <div class="space-y-4 max-h-[100vh] overflow-y-auto">
+                    <!-- Re-using IDs for compatibility -->
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">الفترة الزمنية</label>
+                        <select id="date-filter"
+                            class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-brand-blue">
+                            <option value="all">كل الأوقات</option>
+                            <option value="hour">آخر ساعة</option>
+                            <option value="day">آخر 24 ساعة</option>
+                            <option value="week">آخر 7 أيام</option>
+                            <option value="month">آخر 30 يوم</option>
+                            <option value="3month">آخر 3 أشهر</option>
+                            <option value="6month">آخر 6 أشهر</option>
+                            <option value="9month">آخر 9 أشهر</option>
+                            <option value="year">آخر سنة</option>
+                            <option value="custom">تاريخ مخصص</option>
+                        </select>
+                    </div>
+
+                    <div id="custom-date-range" class="hidden grid-cols-2 gap-2">
+                        <input id="start-date" type="date"
+                            class="bg-slate-800 border border-slate-700 border-slate-700 rounded-lg p-2 text-sm text-white">
+                        <input id="end-date" type="date"
+                            class="bg-slate-800 border border-slate-700 border-slate-700 rounded-lg p-2 text-sm text-white">
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">طريقة الدفع</label>
+                        <select id="payment-filter"
+                            class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                            <option value="">الكل</option>
+                            <option value="cashplus">كاش بلوس</option>
+                            <option value="card">بطاقة ائتمانية</option>
+                            <option value="cash">نقد (Cash)</option>
+                            <option value="bank_transfer">تحويل بنكي</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">المنتج (الباقة)</label>
+                        <select id="product-filter"
+                            class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                            <option value="">الكل</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">معرف الحملة (UTM ID)</label>
+                        <select id="utm-id-filter"
+                            class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                            <option value="">الكل</option>
+                        </select>
+                    </div>
+
+
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">الحملة</label>
+                        <select id="campaign-filter"
+                            class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                            <option value="">الكل</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">الحالة</label>
+                        <select id="status-filter"
+                            class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                            <option value="">الكل</option>
+                            <option value="paid">مدفوع</option>
+                            <option value="pending">معلق</option>
+                            <option value="failed">فاشل</option>
+                            <option value="canceled">ملغي</option>
+                        </select>
+                    </div>
+
+                    <!-- Search Input (Mobile) -->
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">بحث</label>
+                        <input id="search-input" type="text" placeholder="بحث عن اسم، هاتف، بريد..."
+                            class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                    </div>
+                </div>
+
+                <button onclick="document.getElementById('filter-sheet').classList.add('hidden')"
+                    class="w-full mt-6 bg-brand-blue text-white font-bold py-3 rounded-xl hover:bg-blue-700">تطبيق
+                    الفلترة</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modals (Preserved) -->
+    <div id="modal-container"></div>
+    <template id="settings-modal-template">
+        <div class="flex gap-4 border-b border-slate-700 mb-4">
+            <button id="tab-users" class="px-4 py-2 text-blue-400 border-b-2 border-brand-blue font-bold">إدارة
+                الموظفين</button>
+            <button id="tab-password" class="px-4 py-2 text-slate-400 hover:text-slate-200">تغيير كلمة المرور</button>
+            <button id="tab-database" class="px-4 py-2 text-slate-400 hover:text-slate-200">قاعدة البيانات</button>
+        </div>
+        <div id="content-users" class="space-y-4">
+            <div
+                class="bg-slate-800 border border-slate-700/50 p-3 rounded border border-slate-700 flex flex-col gap-3">
+                <div class="flex gap-2">
+                    <div class="flex-1">
+                        <label class="text-xs text-slate-400 block mb-1">بريد الموظف</label>
+                        <input id="new-user-email" type="email" placeholder="admin@luxalry.shop"
+                            class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded text-sm bg-slate-900 text-white placeholder-slate-500 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                    </div>
+                    <div class="flex-1">
+                        <label class="text-xs text-slate-400 block mb-1">كلمة المرور</label>
+                        <input id="new-user-pass" type="text" placeholder="******"
+                            class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded text-sm bg-slate-900 text-white placeholder-slate-500 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                    </div>
+                </div>
+                <div class="flex gap-2 items-end">
+                    <div class="flex-1">
+                        <label class="text-xs text-slate-400 block mb-1">الصلاحية (Role)</label>
+                        <select id="new-user-role"
+                            class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded text-sm bg-slate-900 text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                            <option value="editor">Editor</option>
+                            <option value="super_admin">Super Admin</option>
+                        </select>
+                    </div>
+                    <button id="btn-add-user"
+                        class="bg-emerald-600 text-white px-6 py-2 rounded text-sm font-bold hover:bg-emerald-500 h-9 transition shadow-lg shadow-emerald-900/20">إضافة</button>
+                </div>
+            </div>
+            <div class="overflow-auto max-h-60 border border-slate-700 rounded bg-slate-900">
+                <table class="w-full text-sm text-right">
+                    <thead class="bg-slate-800 border border-slate-700 text-slate-400 sticky top-0">
+                        <tr>
+                            <th class="p-2">البريد</th>
+                            <th class="p-2">التاريخ</th>
+                            <th class="p-2 text-center">حذف</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-list-body" class="divide-y divide-slate-700 text-slate-300">
+                        <tr>
+                            <td colspan="3" class="text-slate-200 text-center col-span-full">جاري التحميل...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div id="content-password" class="hidden space-y-4">
+            <div class="bg-yellow-900/20 border-l-4 border-brand-amber p-4">
+                <p class="text-sm text-amber-400">تنبيه: سيتم تسجيل الخروج.</p>
+            </div>
+            <div><label class="block text-sm font-medium text-slate-300 mb-1">كلمة المرور الجديدة</label><input
+                    id="change-new-pass" type="password"
+                    class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded bg-slate-900 text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+            </div>
+            <button id="btn-save-pass"
+                class="w-full bg-brand-blue text-white py-2 rounded font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-900/20">تحديث</button>
+        </div>
+
+        <!-- Database Management Tab Content -->
+        <div id="content-database" class="hidden space-y-4">
+            <div class="bg-blue-900/20 border-l-4 border-brand-blue p-4">
+                <p class="text-sm text-blue-400">مزامنة البيانات بين Google Sheets و Supabase.</p>
+            </div>
+            <div class="flex flex-col gap-3 p-4 bg-slate-800 rounded border border-slate-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="font-bold text-white">مزامنة العملاء (Leads)</h4>
+                        <p class="text-xs text-slate-400">مزامنة بيانات العملاء والطلبات.</p>
+                    </div>
+                    <button id="btn-manual-sync"
+                        class="bg-brand-blue hover:bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold transition flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15" />
+                        </svg>
+                        <span>بدء المزامنة</span>
+                    </button>
+                </div>
+                <div class="h-px bg-slate-700 my-1"></div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="font-bold text-white">مزامنة المصاريف (Spend)</h4>
+                        <p class="text-xs text-slate-400">مزامنة سجل المصاريف التسويقية.</p>
+                    </div>
+                    <button id="btn-sync-spend"
+                        class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded text-sm font-bold transition flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15" />
+                        </svg>
+                        <span>بدء المزامنة</span>
+                    </button>
+                </div>
+                <div class="h-px bg-slate-700 my-1"></div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="font-bold text-white">مزامنة الحملات (Campaigns)</h4>
+                        <p class="text-xs text-slate-400">مزامنة إعدادات وميزانيات الحملات.</p>
+                    </div>
+                    <button id="btn-sync-campaigns"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15" />
+                        </svg>
+                        <span>بدء المزامنة</span>
+                    </button>
+                </div>
+            </div>
+            <div id="sync-status-area"
+                class="hidden p-3 rounded text-xs font-mono bg-slate-950 border border-slate-800 text-slate-300 whitespace-pre-wrap">
+            </div>
+        </div>
+    </template>
+
+    <template id="invite-modal-template">
+        <div class="space-y-4">
+            <div class="bg-blue-900/20 border-l-4 border-brand-blue p-4 mb-4">
+                <p class="text-sm text-blue-400 font-bold">إرسال دعوة رسمية</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label class="block text-sm font-medium text-slate-300 mb-1">اسم المنتج</label><input
+                        id="invite-product-name" type="text"
+                        class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded bg-slate-800 border border-slate-700 text-slate-300"
+                        readonly>
+                </div>
+                <div><label class="block text-sm font-medium text-slate-300 mb-1">اسم العميل</label><input
+                        id="invite-client-name" type="text"
+                        class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded bg-slate-800 border border-slate-700 text-slate-300"
+                        readonly>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label class="block text-sm font-medium text-slate-300 mb-1">التاريخ</label><input id="invite-date"
+                        type="date"
+                        class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded bg-slate-900 text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                </div>
+                <div><label class="block text-sm font-medium text-slate-300 mb-1">التوقيت</label><input id="invite-time"
+                        type="time"
+                        class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded bg-slate-900 text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                </div>
+            </div>
+            <div><label class="block text-sm font-medium text-slate-300 mb-1">المكان</label><input id="invite-location"
+                    type="text"
+                    class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded bg-slate-900 text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+            </div>
+            <div><label class="block text-sm font-medium text-slate-300 mb-1">رابط الخريطة</label><input
+                    id="invite-maps-link" type="url"
+                    class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded bg-slate-900 text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+            </div>
+            <div class="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-700">
+                <button id="btn-cancel-invite"
+                    class="px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 rounded hover:bg-slate-700 transition">إلغاء</button>
+                <button id="btn-send-invite"
+                    class="px-6 py-2 bg-brand-blue text-white rounded font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-900/20">إرسال</button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/assets/js/reports.js"></script>
+    <script src="dashboard-mini.js"></script>
+    <script src="bulk-invite.js"></script>
+
+    <!-- KPI Glossary Modal -->
+    <div id="kpi-glossary-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    دليل المصطلحات (KPIs)
+                </h3>
+                <button id="close-kpi-modal" class="text-slate-400 hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div class="space-y-6">
+                    <!-- Traffic -->
+                    <div>
+                        <h4 class="text-blue-400 font-bold mb-3 text-sm border-b border-blue-900/30 pb-1">الزيارات
+                            والظهور (Traffic)</h4>
+                        <div class="grid gap-3 text-sm">
+                            <div class="flex justify-between items-start border-b border-slate-800 pb-2">
+                                <span class="text-slate-300 font-bold w-1/3">Impressions (الظهور)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">عدد مرات ظهور إعلانك للمستخدمين.</span>
+                            </div>
+                            <div class="flex justify-between items-start border-b border-slate-800 pb-2">
+                                <span class="text-slate-300 font-bold w-1/3">CPM (التكلفة لكل ألف)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">تكلفة كل 1000 ظهور للإعلان. (Cost Per
+                                    Mille)</span>
+                            </div>
+                            <div class="flex justify-between items-start border-b border-slate-800 pb-2">
+                                <span class="text-slate-300 font-bold w-1/3">Clicks (النقرات)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">عدد المرات التي نقر فيها المستخدمون على
+                                    إعلانك.</span>
+                            </div>
+                            <div class="flex justify-between items-start border-b border-slate-800 pb-2">
+                                <span class="text-slate-300 font-bold w-1/3">CTR (نسبة النقر)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">نسبة من شاهدوا الإعلان وقاموا بالنقر عليه.
+                                    (Clicks / Impressions)</span>
+                            </div>
+                            <div class="flex justify-between items-start">
+                                <span class="text-slate-300 font-bold w-1/3">CPC (تكلفة النقرة)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">متوسط التكلفة التي تدفعها مقابل كل نقرة.
+                                    (Cost Per Click)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Conversion -->
+                    <div>
+                        <h4 class="text-purple-400 font-bold mb-3 text-sm border-b border-purple-900/30 pb-1">التحويلات
+                            والطلبات (Conversion)</h4>
+                        <div class="grid gap-3 text-sm">
+                            <div class="flex justify-between items-start border-b border-slate-800 pb-2">
+                                <span class="text-slate-300 font-bold w-1/3">Orders (الطلبات)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">عدد العمليات الشرائية المؤكدة أو
+                                    المسجلة.</span>
+                            </div>
+                            <div class="flex justify-between items-start border-b border-slate-800 pb-2">
+                                <span class="text-slate-300 font-bold w-1/3">CPA (تكلفة الاستحواذ)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">تكلفة الحصول على طلب واحد ناجح. (Spend /
+                                    Orders)</span>
+                            </div>
+                            <div class="flex justify-between items-start">
+                                <span class="text-slate-300 font-bold w-1/3">CVR (معدل التحويل)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">نسبة النقرات التي تحولت إلى طلبات فعلية.
+                                    (Orders / Clicks)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Financials -->
+                    <div>
+                        <h4 class="text-emerald-400 font-bold mb-3 text-sm border-b border-emerald-900/30 pb-1">الأداء
+                            المالي (Financials)</h4>
+                        <div class="grid gap-3 text-sm">
+                            <div class="flex justify-between items-start border-b border-slate-800 pb-2">
+                                <span class="text-slate-300 font-bold w-1/3">Revenue (الإيرادات)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">إجمالي المبلغ المحصل من الطلبات المرتبطة
+                                    بالحملة.</span>
+                            </div>
+                            <div class="flex justify-between items-start border-b border-slate-800 pb-2">
+                                <span class="text-slate-300 font-bold w-1/3">ROAS (العائد على الإنفاق)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">كم ربحت مقابل كل درهم أنفقته. (Revenue /
+                                    Spend). إذا كان 2x يعني ربحت الضعف.</span>
+                            </div>
+                            <div class="flex justify-between items-start">
+                                <span class="text-slate-300 font-bold w-1/3">Net Profit (صافي الربح)</span>
+                                <span class="text-slate-400 w-2/3 text-sm">الربح المتبقي بعد خصم تكلفة الإعلانات.
+                                    (Revenue - Spend)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 bg-slate-800/50 border-t border-slate-700 text-center">
+                <button id="close-kpi-modal-btn"
+                    class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg transition-colors text-sm font-bold">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>System Access | Tadrib</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="icon" href="/assets/images/favicon_io/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Cairo', 'system-ui', 'sans-serif'],
+                        'mono': ['JetBrains Mono', 'monospace'],
+                        'tech': ['Inter', 'sans-serif']
+                    },
+                    colors: {
+                        brand: {
+                            gold: '#F59E0B',
+                            dark: '#0f172a',
+                            panel: '#1e293b',
+                            border: '#334155'
+                        }
+                    },
+                    backgroundImage: {
+                        'blueprint': "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)"
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            background-repeat: no-repeat, repeat, repeat;
+        }
+
+        /* Technical Corners */
+        .tech-corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #F59E0B;
+            opacity: 0.7;
+        }
+
+        .tl {
+            top: -2px;
+            left: -2px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .tr {
+            top: -2px;
+            right: -2px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .bl {
+            bottom: -2px;
+            left: -2px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .br {
+            bottom: -2px;
+            right: -2px;
+            border-left: none;
+            border-top: none;
+        }
+
+        /* Input Switch Style */
+        .tech-input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            transition: all 0.2s ease;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .tech-input:focus {
+            border-color: #F59E0B;
+            box-shadow: 0 0 0 1px #F59E0B;
+            outline: none;
+            background: #151f32;
+        }
+
+        /* Scan Line Animation */
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: rgba(245, 158, 11, 0.2);
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+            animation: scan 4s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 0%;
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            90% {
+                opacity: 1;
+            }
+
+            100% {
+                top: 100%;
+                opacity: 0;
+            }
+        }
+
+        /* Status Dot Pulse */
+        .status-dot {
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            }
+
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+            }
+
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+        }
+    </style>
+    <script>
+        // Helper to check JWT expiration
+        function isTokenExpired(token) {
+            if (!token) return true;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.exp * 1000 < Date.now();
+            } catch (e) {
+                return true;
+            }
+        }
+
+        // Redirect if already logged in AND token is valid
+        const adminToken = localStorage.getItem('admin_token');
+        const escalationToken = sessionStorage.getItem('escalation_token');
+
+        if ((adminToken && !isTokenExpired(adminToken)) || (escalationToken && !isTokenExpired(escalationToken))) {
+            window.location.href = 'dashboard';
+        } else {
+            // Cleanup expired tokens
+            if (adminToken && isTokenExpired(adminToken)) localStorage.removeItem('admin_token');
+            if (escalationToken && isTokenExpired(escalationToken)) sessionStorage.removeItem('escalation_token');
+        }
+    </script>
+</head>
+
+<body class="bg-[#0f172a] overflow-hidden">
+
+    <!-- Layout Wrapper (Forces LTR & Dynamic Height) -->
+    <div id="app-layout" dir="ltr" style="display: none;"
+        class="relative min-h-[100dvh] w-full flex items-center justify-center overflow-hidden">
+
+        <!-- Ambient Glow -->
+        <div class="hidden">
+        </div>
+
+        <!-- Scattered Watermarks -->
+        <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+            <div class="absolute top-10 left-10 text-slate-800/50 text-4xl font-black font-sans opacity-20">SYSTEM</div>
+            <div class="absolute bottom-20 right-10 text-slate-800/50 text-6xl font-black font-sans opacity-20">TADRIB
+            </div>
+            <div class="absolute top-1/3 right-20 text-slate-800/30 text-2xl font-mono rotate-90 opacity-20">SECURE
+            </div>
+            <div class="absolute bottom-1/3 left-20 text-slate-800/30 text-2xl font-mono -rotate-45 opacity-20">v3.0
+            </div>
+        </div>
+
+        <!-- Main Monolith Card -->
+        <div class="relative w-[92%] max-w-[450px] bg-brand-panel shadow-2xl z-10 mx-auto group">
+            <!-- Dynamic Glow (Attached to Card) -->
+            <div
+                class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] bg-blue-900/30 blur-[80px] -z-10 rounded-full pointer-events-none">
+            </div>
+
+            <!-- Top Accent Bar -->
+            <div class="h-1 w-full bg-brand-gold shadow-[0_0_15px_rgba(245,158,11,0.3)]"></div>
+
+            <!-- Scan Line -->
+            <div class="scan-line"></div>
+
+            <!-- Card Content -->
+            <div class="p-6 md:p-10 relative">
+                <!-- Tech Corners -->
+                <div class="tech-corner tl"></div>
+                <div class="tech-corner tr"></div>
+                <div class="tech-corner bl"></div>
+                <div class="tech-corner br"></div>
+
+                <!-- Header -->
+                <div class="mb-10 text-center">
+                    <div
+                        class="inline-flex items-center justify-center w-16 h-16 bg-brand-dark border border-brand-border rounded-lg mb-6">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-brand-gold" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                    </div>
+                    <h1 class="text-2xl font-bold text-white mb-1 tracking-wide font-sans">COMMAND CENTER</h1>
+                    <p class="text-xs font-mono text-slate-400 uppercase tracking-widest">Authorized Personnel Only</p>
+                </div>
+
+                <!-- Form -->
+                <div class="flex justify-end mb-4">
+                    <button type="button" id="toggle-mode"
+                        class="text-[10px] font-mono text-slate-500 hover:text-brand-gold uppercase tracking-widest transition-colors">
+                        [ Switch to Emergency Access ]
+                    </button>
+                </div>
+                <form id="login-form" class="space-y-6">
+                    <div>
+                        <label for="username"
+                            class="block text-xs font-mono text-slate-400 mb-2 uppercase tracking-wider">User ID</label>
+                        <div class="relative">
+                            <input type="text" id="username" autocomplete="username" required
+                                class="tech-input w-full px-4 py-3 text-sm rounded-none" placeholder="ADMIN_ID">
+                            <div class="absolute inset-y-0 right-0 w-1 bg-brand-border"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password"
+                            class="block text-xs font-mono text-slate-400 mb-2 uppercase tracking-wider">Access
+                            Key</label>
+                        <div class="relative">
+                            <input type="password" id="password" autocomplete="current-password" required
+                                class="tech-input w-full px-4 py-3 text-sm rounded-none" placeholder="••••••••••••">
+                            <div class="absolute inset-y-0 right-0 w-1 bg-brand-border"></div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4">
+                        <button type="submit"
+                            class="w-full bg-brand-gold hover:bg-amber-500 text-brand-dark font-bold py-3.5 px-4 transition-all duration-200 uppercase tracking-wider text-sm flex items-center justify-center gap-2 group active:translate-y-0.5">
+                            <span>Initiate Session</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                            </svg>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Error Message -->
+                <div id="login-error"
+                    class="mt-6 p-3 bg-red-900/20 border border-red-900/50 text-red-400 text-xs font-mono text-center hidden">
+                    ACCESS DENIED: INVALID CREDENTIALS
+                </div>
+
+                <!-- Footer Status -->
+                <div
+                    class="mt-8 pt-6 border-t border-brand-border flex items-center justify-between text-[10px] font-mono text-slate-500 uppercase">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 status-dot"></div>
+                        <span>System Online</span>
+                    </div>
+                    <div>v3.0.1_SECURE</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Background Watermark -->
+        <div class="hidden">
+            TADRIB
+        </div>
+
+        <script src="login-mini.js"></script>
+</body>
+
+</html>
