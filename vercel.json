@@ -3,14 +3,18 @@
   "outputDirectory": ".",
 
   "redirects": [
-    { "source": "/admin",       "destination": "/admin/login.html", "permanent": true },
-    { "source": "/admin/",      "destination": "/admin/login.html", "permanent": true },
-    { "source": "/index.html",  "destination": "/",                 "permanent": true },
-    { "source": "/404.html",    "destination": "/404",              "permanent": true }
+    { "source": "/admin",                  "destination": "/admin/login",    "permanent": true },
+    { "source": "/admin/",                 "destination": "/admin/login",    "permanent": true },
+    { "source": "/admin/login.html",       "destination": "/admin/login",    "permanent": true },
+    { "source": "/admin/dashboard.html",   "destination": "/admin/dashboard","permanent": true },
+    { "source": "/index.html",             "destination": "/",               "permanent": true },
+    { "source": "/404.html",               "destination": "/404",            "permanent": true }
   ],
 
   "rewrites": [
+    { "source": "/admin/login",     "destination": "/admin/login.html" },
     { "source": "/admin/dashboard", "destination": "/admin/dashboard.html" },
+    { "source": "/404",             "destination": "/404.html" },
     { "source": "/(.*)",            "destination": "/$1" }
   ],
 
