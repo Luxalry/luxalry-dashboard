@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ===================================================================
  * Client-Side Analytics Engine (Full Enterprise Version)
  * ===================================================================
@@ -2520,8 +2520,6 @@ class AdminDashboard {
         });
         if (current) sel.value = current;
     }
-    populateProductFilterOptions(data) { this.populateProductFilterOptions(data); } // backward compat
-
     // تعبئة قائمة فلتر الحملات من البيانات الموجودة
     populateCampaignFilterOptions(data) {
         const sel = document.getElementById('campaign-filter');
