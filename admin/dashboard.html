@@ -591,31 +591,31 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Failed -->
-                    <div class="glass-card rounded-xl p-4 border-t-4 border-red-500">
-                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">عمليات فاشلة</h3>
+                    <!-- Confirmed -->
+                    <div class="glass-card rounded-xl p-4 border-t-4 border-teal-400">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">عمليات مؤكدة</h3>
                         <div class="flex justify-between items-start gap-2">
                             <div class="w-1/2 text-right border-l border-slate-700 pl-2">
                                 <div class="text-[10px] text-slate-500 mb-1">الإجمالي (Global)</div>
-                                <div id="failed-payments-stats" class="text-2xl font-bold text-white">--</div>
+                                <div id="confirmed-payments-stats" class="text-2xl font-bold text-white">--</div>
                             </div>
                             <div class="filtered-stat-wrapper hidden w-1/2 text-right pr-2">
-                                <div class="text-[10px] text-red-400 mb-1">المفلتر (Filtered)</div>
-                                <div id="filtered-failed-payments-stats" class="text-sm text-red-400">--</div>
+                                <div class="text-[10px] text-teal-400 mb-1">المفلتر (Filtered)</div>
+                                <div id="filtered-confirmed-payments-stats" class="text-sm text-teal-400">--</div>
                             </div>
                         </div>
                     </div>
-                    <!-- Canceled -->
-                    <div class="glass-card rounded-xl p-4 border-t-4 border-slate-500">
-                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">عمليات ملغية</h3>
+                    <!-- Canceled / Failed -->
+                    <div class="glass-card rounded-xl p-4 border-t-4 border-red-500">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">عمليات ملغية/فاشلة</h3>
                         <div class="flex justify-between items-start gap-2">
                             <div class="w-1/2 text-right border-l border-slate-700 pl-2">
                                 <div class="text-[10px] text-slate-500 mb-1">الإجمالي (Global)</div>
                                 <div id="canceled-payments-stats" class="text-2xl font-bold text-white">--</div>
                             </div>
                             <div class="filtered-stat-wrapper hidden w-1/2 text-right pr-2">
-                                <div class="text-[10px] text-slate-400 mb-1">المفلتر (Filtered)</div>
-                                <div id="filtered-canceled-payments-stats" class="text-sm text-slate-400">--</div>
+                                <div class="text-[10px] text-red-400 mb-1">المفلتر (Filtered)</div>
+                                <div id="filtered-canceled-payments-stats" class="text-sm text-red-400">--</div>
                             </div>
                         </div>
                     </div>
@@ -958,10 +958,10 @@
                         <select id="status-filter"
                             class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white">
                             <option value="">الكل</option>
-                            <option value="paid">مدفوع</option>
+                            <option value="paid">مدفوع / تم التسليم</option>
+                            <option value="confirmed">مؤكد</option>
                             <option value="pending">معلق</option>
-                            <option value="failed">فاشل</option>
-                            <option value="canceled">ملغي</option>
+                            <option value="cancelled">ملغي / فاشل</option>
                         </select>
                     </div>
 
