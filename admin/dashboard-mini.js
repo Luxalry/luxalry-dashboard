@@ -1299,16 +1299,25 @@ class AdminDashboard {
     // رسم توزيع الكميات (بديل Qualification)
     renderQuantityChart(dataSet) {
         if (!document.getElementById('quantity-chart')) return;
-        const counts = { '×1 قارورة': 0, '×2 قارورة': 0, '×3 قوارير': 0 };
+
+        // تجميع ديناميكي — يعمل مع أي منتج
+        const counts = {};
         dataSet.forEach(item => {
-            const q = parseInt(item.quantity || 1);
-            if (q === 1) counts['×1 قارورة']++;
-            else if (q === 2) counts['×2 قارورة']++;
-            else counts['×3 قوارير']++;
+            const q = parseInt(item.quantity || item.productVariant || 1);
+            const label = `×${q}`;
+            counts[label] = (counts[label] || 0) + 1;
         });
+
+        const entries = Object.entries(counts)
+            .sort((a, b) => parseInt(a[0].replace('×', '')) - parseInt(b[0].replace('×', '')));
+
+        if (!entries.length) return;
+
+        const palette = ['#3B82F6', '#F59E0B', '#10B981', '#A78BFA', '#F87171', '#22D3EE'];
+
         this.renderChart('quantity-chart', 'quantityDist', 'doughnut', {
-            labels: Object.keys(counts),
-            datasets: [{ data: Object.values(counts), backgroundColor: ['#3B82F6', '#F59E0B', '#10B981'], borderWidth: 0 }]
+            labels: entries.map(e => e[0]),
+            datasets: [{ data: entries.map(e => e[1]), backgroundColor: palette.slice(0, entries.length), borderWidth: 0 }]
         }, {});
     }
 
@@ -2147,8 +2156,7 @@ class AdminDashboard {
                 ${item.language ? `<span class="text-[10px] px-1 rounded bg-slate-700 text-slate-300 ml-1 uppercase">${item.language}</span>` : ''}
             </td>
             <td class="px-6 py-4 text-sm text-center">
-                <span class="font-bold text-white text-lg">${this.sanitizeHTML(String(item.quantity || 1))}</span>
-                <span class="text-xs text-slate-400 block">قارورة</span>
+                <span class="font-bold text-white text-lg">×${this.sanitizeHTML(String(item.quantity || 1))}</span>
             </td>
             <td class="px-6 py-4 text-sm text-slate-400 max-w-[160px] truncate" title="${this.sanitizeHTML(item.clientAddress || '')}">${this.sanitizeHTML(item.clientAddress || '-')}</td>
             <td class="px-6 py-4 text-xs text-right" dir="ltr">${utmBadges}</td>
@@ -2190,7 +2198,7 @@ class AdminDashboard {
                 <div class="text-xs text-slate-400">العميل</div>
                 <div class="font-bold text-white">${this.escapeHtml(row.customerName)}</div>
                 <div class="text-xs text-slate-400 font-mono mt-1">${this.escapeHtml(row.customerPhone)}</div>
-                <div class="text-xs text-slate-400 mt-1">🧴 ${this.escapeHtml(row.productSku || 'Dermossence')} — ×${row.quantity || 1} قارورة</div>
+                <div class="text-xs text-slate-400 mt-1">🧴 ${this.escapeHtml(row.normalizedCourse || row.productSku || row.productTitle || 'Unknown')} — ×${row.quantity || 1}</div>
             </div>
             <div>
                 <label class="text-xs font-bold text-slate-400 block mb-1">ملاحظة المتابعة</label>
@@ -2459,51 +2467,117 @@ class AdminDashboard {
         const cont = document.getElementById('product-stats-container');
         if (!cont) return;
 
-        // Dermossence: group by quantity (1, 2, 3 bottles)
-        const stats = { 1: { total: 0, pending: 0, confirmed: 0, rev: 0 }, 2: { total: 0, pending: 0, confirmed: 0, rev: 0 }, 3: { total: 0, pending: 0, confirmed: 0, rev: 0 } };
-        data.forEach(i => {
-            const q = Math.min(parseInt(i.quantity || 1), 3);
-            if (!stats[q]) stats[q] = { total: 0, pending: 0, confirmed: 0, rev: 0 };
-            stats[q].total++;
-            if (i.status === 'paid' || i.status === 'delivered') {
-                stats[q].confirmed++;
-                stats[q].rev += i.finalAmount;
-            } else {
-                stats[q].pending++;
+        if (!data || data.length === 0) {
+            cont.innerHTML = `<p class="text-slate-400 text-center col-span-full py-6">لا توجد بيانات.</p>`;
+            return;
+        }
+
+        // 1. تجميع ديناميكي حسب اسم المنتج (normalizedCourse = productTitle)
+        const productMap = {};
+        data.forEach(item => {
+            const name = item.normalizedCourse || item.productTitle || 'Unknown';
+            if (!productMap[name]) {
+                productMap[name] = { name, total: 0, pending: 0, confirmed: 0, cancelled: 0, revenue: 0, variants: {} };
             }
+            const p = productMap[name];
+            p.total++;
+            const status = (item.status || 'pending').toLowerCase();
+            if (status === 'paid' || status === 'delivered') {
+                p.confirmed++;
+                p.revenue += parseFloat(item.finalAmount) || 0;
+            } else if (status === 'cancelled' || status === 'failed') {
+                p.cancelled++;
+            } else {
+                p.pending++;
+            }
+            // توزيع الكميات (Variants)
+            const qty = String(parseInt(item.quantity || item.productVariant || 1));
+            p.variants[qty] = (p.variants[qty] || 0) + 1;
         });
 
-        const labels = { 1: '×1 — قارورة واحدة', 2: '×2 — قارورتان', 3: '×3 — ثلاث قوارير (العرض)' };
-        const colors = { 1: 'border-l-blue-400', 2: 'border-l-amber-400', 3: 'border-l-green-500' };
+        // 2. ترتيب: الأكثر مبيعاً أولاً
+        const sorted = Object.values(productMap).sort((a, b) => b.total - a.total);
+        const bestSeller = sorted[0];
 
-        cont.innerHTML = Object.entries(stats)
-            .map(([q, s]) => `
-            <div class="bg-slate-900 text-white border rounded-lg p-4 shadow-sm border-l-4 ${colors[q]}">
-                <div class="flex justify-between mb-3 items-center">
-                    <span class="font-bold text-white text-sm">${labels[q]}</span>
-                    <span class="bg-blue-900/20 text-blue-400 text-xs px-2 py-1 rounded-full font-mono">${s.total} طلب</span>
+        // 3. تحديث عنوان القسم
+        const h3 = cont.closest('section')?.querySelector('h3');
+        if (h3) h3.textContent = `إحصائيات المنتجات (${sorted.length} منتج)`;
+
+        // 4. لوحة ألوان تتكرر تلقائياً
+        const borderColors = [
+            'border-l-blue-400', 'border-l-amber-400', 'border-l-green-500',
+            'border-l-purple-400', 'border-l-rose-400', 'border-l-cyan-400'
+        ];
+
+        // 5. رسم البطاقات
+        cont.innerHTML = sorted.map((p, idx) => {
+            const isBest = p === bestSeller && sorted.length > 1;
+            const convRate = p.total > 0 ? ((p.confirmed / p.total) * 100).toFixed(1) : '0.0';
+            const border = borderColors[idx % borderColors.length];
+
+            // صفوف الكميات (Variants) مرتبةً تنازلياً
+            const variantRows = Object.entries(p.variants)
+                .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+                .map(([qty, count]) => {
+                    const pct = p.total > 0 ? ((count / p.total) * 100).toFixed(0) : 0;
+                    return `
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="text-slate-400 w-10 shrink-0">×${qty}</span>
+                        <div class="flex-1 bg-slate-700/50 rounded-full h-1.5">
+                            <div class="bg-blue-400 h-1.5 rounded-full" style="width:${pct}%"></div>
+                        </div>
+                        <span class="font-mono text-slate-300 w-8 text-right">${count}</span>
+                    </div>`;
+                }).join('');
+
+            return `
+            <div class="bg-slate-900 text-white border border-slate-700/50 rounded-lg p-4 shadow-sm border-l-4 ${border} relative">
+                ${isBest ? `<span class="absolute top-2 left-2 bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40">🏆 الأكثر مبيعاً</span>` : ''}
+                <div class="flex justify-between items-start mb-3 ${isBest ? 'mt-5' : ''}">
+                    <span class="font-bold text-white text-sm leading-tight max-w-[68%]">${this.escapeHtml(p.name)}</span>
+                    <span class="bg-blue-900/20 text-blue-400 text-xs px-2 py-1 rounded-full font-mono shrink-0">${p.total} طلب</span>
                 </div>
-                <div class="text-xs text-slate-400 space-y-2">
-                    <div class="flex justify-between"><span>معلق:</span> <span class="font-bold text-amber-400">${s.pending}</span></div>
-                    <div class="flex justify-between"><span>مؤكد:</span> <span class="font-bold text-green-400">${s.confirmed}</span></div>
-                    <div class="flex justify-between pt-2 border-t"><span>الإيراد:</span> <span class="font-bold text-white text-sm">${(s.rev || 0).toLocaleString()} MAD</span></div>
+                <div class="space-y-1.5 mb-3">
+                    ${variantRows || '<span class="text-xs text-slate-500">لا توجد كميات</span>'}
                 </div>
-            </div>`).join('');
+                <div class="text-xs text-slate-400 space-y-1.5 border-t border-slate-700/60 pt-2">
+                    <div class="flex justify-between"><span>معلق:</span> <span class="font-bold text-amber-400">${p.pending}</span></div>
+                    <div class="flex justify-between"><span>مؤكد:</span> <span class="font-bold text-green-400">${p.confirmed}</span></div>
+                    <div class="flex justify-between"><span>نسبة التحول:</span> <span class="font-bold text-blue-400">${convRate}%</span></div>
+                    <div class="flex justify-between pt-1 border-t border-slate-700/40">
+                        <span>الإيراد:</span>
+                        <span class="font-bold text-white">${(p.revenue || 0).toLocaleString()} MAD</span>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
     }
 
     renderQualificationChart(dataSet) {
-        // Dermossence: show quantity distribution instead
         if (!document.getElementById('qualification-chart')) return;
-        const counts = { '×1 قارورة': 0, '×2 قارورة': 0, '×3 قوارير': 0 };
+
+        // تجميع ديناميكي حسب الكمية مع أي عدد من المنتجات
+        const counts = {};
         dataSet.forEach(item => {
-            const q = parseInt(item.quantity || 1);
-            if (q === 1) counts['×1 قارورة']++;
-            else if (q === 2) counts['×2 قارورة']++;
-            else counts['×3 قوارير']++;
+            const qty = parseInt(item.quantity || item.productVariant || 1);
+            const label = `×${qty}`;
+            counts[label] = (counts[label] || 0) + 1;
         });
+
+        const entries = Object.entries(counts)
+            .sort((a, b) => parseInt(a[0].replace('×', '')) - parseInt(b[0].replace('×', '')));
+
+        if (!entries.length) return;
+
+        const palette = ['#3B82F6', '#F59E0B', '#27ae60', '#A78BFA', '#F87171', '#22D3EE'];
+
         this.renderChart('qualification-chart', 'qualification', 'doughnut', {
-            labels: Object.keys(counts),
-            datasets: [{ data: Object.values(counts), backgroundColor: ['#3B82F6', '#F59E0B', '#27ae60'], borderWidth: 0 }]
+            labels: entries.map(e => e[0]),
+            datasets: [{
+                data: entries.map(e => e[1]),
+                backgroundColor: palette.slice(0, entries.length),
+                borderWidth: 0
+            }]
         }, {});
     }
 
@@ -2775,12 +2849,13 @@ class AdminDashboard {
         const item = this.filteredData[idx];
         const s = (v) => v || ''; // دالة مساعدة للنصوص الفارغة
 
-        // 1. Dermossence: Edit form fields
-        const quantities = [
-            { val: '1', label: '×1 — قارورة واحدة (299 MAD)' },
-            { val: '2', label: '×2 — قارورتان (549 MAD)' },
-            { val: '3', label: '×3 — ثلاث قوارير / العرض (749 MAD)' }
-        ];
+        // 1. قائمة الكميات الديناميكية — مبنية من البيانات الحالية
+        const knownQtys = [...new Set(this.allData.map(d => parseInt(d.quantity || 1)))]
+            .filter(q => !isNaN(q) && q > 0)
+            .sort((a, b) => a - b);
+        const quantities = knownQtys.length
+            ? knownQtys.map(q => ({ val: String(q), label: `×${q}` }))
+            : [{ val: '1', label: '×1' }, { val: '2', label: '×2' }, { val: '3', label: '×3' }];
         const languages = [
             { val: 'fr', label: 'Français' },
             { val: 'ar', label: 'العربية' },
@@ -2899,13 +2974,13 @@ class AdminDashboard {
     // استبدل دالة showAddModal القديمة بهذه النسخة الجديدة كلياً
     // ============================================================
     showAddModal() {
-        // 1. تعريف القوائم المنسدلة (Dropdown Options)
-        // Dermossence: product options
-        const quantities = [
-            { val: '1', label: '×1 — قارورة واحدة (299 MAD)' },
-            { val: '2', label: '×2 — قارورتان (549 MAD)' },
-            { val: '3', label: '×3 — ثلاث قوارير / العرض (749 MAD)' }
-        ];
+        // 1. تعريف القوائم المنسدلة — ديناميكية حسب البيانات الحالية
+        const knownQtys = [...new Set(this.allData.map(d => parseInt(d.quantity || 1)))]
+            .filter(q => !isNaN(q) && q > 0)
+            .sort((a, b) => a - b);
+        const quantities = knownQtys.length
+            ? knownQtys.map(q => ({ val: String(q), label: `×${q}` }))
+            : [{ val: '1', label: '×1' }, { val: '2', label: '×2' }, { val: '3', label: '×3' }];
         const languages = [
             { val: 'fr', label: 'Français' },
             { val: 'ar', label: 'العربية' },
