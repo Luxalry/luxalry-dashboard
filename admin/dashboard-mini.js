@@ -2171,7 +2171,8 @@ class AdminDashboard {
             <td class="px-6 py-4 text-xs text-right" dir="ltr">${utmBadges}</td>
             <td class="px-6 py-4 text-sm font-bold text-slate-400 text-left sensitive-amount" dir="ltr">MAD ${this.sanitizeHTML(String(item.finalAmount))}</td>
             <td class="px-6 py-4 text-sm text-right">
-                <div class="font-bold text-emerald-400">COD 📦</div>
+                <div class="font-bold text-emerald-400">${paymentMethodText}</div>
+                ${paymentCodeDisplay}
                 ${item.status !== 'cancelled' && item.status !== 'canceled' && item.deliveryNote ? `<div class="text-xs text-slate-400 mt-0.5">${this.sanitizeHTML(item.deliveryNote)}</div>` : ''}
             </td>
             <td class="px-6 py-4 text-xs text-slate-400 text-right italic dir-ltr">
