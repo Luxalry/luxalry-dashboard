@@ -2928,8 +2928,8 @@ class AdminDashboard {
                     <select class="bg-slate-900 border border-slate-700 text-white p-2 w-full rounded-lg" name="status">
                         <option value="pending" ${item.status === 'pending' ? 'selected' : ''}>⏳ Pending (معلق)</option>
                         <option value="confirmed" ${item.status === 'confirmed' ? 'selected' : ''}>✅ Confirmed (مؤكد)</option>
-                        <option value="delivered" ${item.status === 'delivered' ? 'selected' : ''}>📦 Delivered (تم التسليم)</option>
-                        <option value="canceled" ${item.status === 'canceled' ? 'selected' : ''}>❌ Canceled (ملغي)</option>
+                        <option value="paid" ${item.status === 'paid' ? 'selected' : ''}>📦 Delivered (تم التسليم)</option>
+                        <option value="cancelled" ${item.status === 'cancelled' ? 'selected' : ''}>❌ Cancelled (ملغي)</option>
                     </select>
                 </div>
                 <div>
@@ -3069,8 +3069,8 @@ class AdminDashboard {
                         <select id="manual-status" class="bg-slate-900 border border-slate-700 text-white p-2 w-full rounded" name="status">
                             <option value="pending" selected>⏳ Pending (معلق)</option>
                             <option value="confirmed">✅ Confirmed (مؤكد)</option>
-                            <option value="delivered">📦 Delivered (تم التسليم)</option>
-                            <option value="canceled">❌ Canceled (ملغي)</option>
+                            <option value="paid">📦 Delivered (تم التسليم)</option>
+                            <option value="cancelled">❌ Cancelled (ملغي)</option>
                         </select>
                     </div>
                     <div>
