@@ -411,9 +411,9 @@
                     <div class="flex items-center gap-2 bg-slate-800 border border-slate-700 p-1 rounded-lg">
                         <select id="data-source-select"
                             class="bg-transparent text-sm text-slate-400 border-none focus:ring-0 py-1 px-2 cursor-pointer">
-                            <option value="sheets" selected="true" style="background-color: #0f172a;" dir="ltr">Google
+                            <option value="sheets" style="background-color: #0f172a;" dir="ltr">Google
                                 Sheets 📊</option>
-                            <option value="supabase" style="background-color: #0f172a;" dir="ltr">Supabase ⚡</option>
+                            <option value="supabase" selected="true" style="background-color: #0f172a;" dir="ltr">Supabase ⚡</option>
                         </select>
                     </div>
                     <!-- Refresh Button -->
@@ -435,7 +435,7 @@
                             <option value="hour">آخر ساعة</option>
                             <option value="day">آخر 24 ساعة</option>
                             <option value="week">آخر 7 أيام</option>
-                            <option value="month">آخر 30 يوم</option>
+                            <option value="month" selected>آخر 30 يوم</option>
                             <option value="3month">آخر 3 أشهر</option>
                             <option value="6month">آخر 6 أشهر</option>
                             <option value="9month">آخر 9 أشهر</option>
@@ -900,7 +900,7 @@
                             <option value="hour">آخر ساعة</option>
                             <option value="day">آخر 24 ساعة</option>
                             <option value="week">آخر 7 أيام</option>
-                            <option value="month">آخر 30 يوم</option>
+                            <option value="month" selected>آخر 30 يوم</option>
                             <option value="3month">آخر 3 أشهر</option>
                             <option value="6month">آخر 6 أشهر</option>
                             <option value="9month">آخر 9 أشهر</option>
@@ -958,7 +958,8 @@
                         <select id="status-filter"
                             class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white">
                             <option value="">الكل</option>
-                            <option value="paid">مدفوع / تم التسليم</option>
+                            <option value="delivered">تم التسليم</option>
+                            <option value="paid">مدفوع</option>
                             <option value="confirmed">مؤكد</option>
                             <option value="pending">معلق</option>
                             <option value="cancelled">ملغي / فاشل</option>
