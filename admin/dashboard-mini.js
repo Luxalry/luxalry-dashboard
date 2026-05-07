@@ -222,7 +222,6 @@ class AdminDashboard {
                     let s = (item.status || 'pending').toLowerCase();
                     if (s === 'pending_cashplus') s = 'pending';
                     if (s === 'canceled' || s === 'not-confirmed' || s === 'failed') s = 'cancelled';
-                    if (s === 'delivered') s = 'paid';
                     item.status = s;
 
                     // --- [التعديل الجديد] توحيد مصطلحات الدفع ---
@@ -582,7 +581,7 @@ class AdminDashboard {
             // 1. البحث النصي (يشمل الاسم، الإيميل، الهاتف، الدورة، المصدر)
             const searchTargets = [
                 item.customerName, item.customerEmail, item.customerPhone,
-                item.productName, item.inquiryId, item.utm_source
+                item.productName, item.orderId, item.utm_source
             ].join(' ').toLowerCase();
 
             if (searchTerm && !searchTargets.includes(searchTerm)) return false;
@@ -851,8 +850,8 @@ class AdminDashboard {
             totalRevenue: 0,
             totalFees: 0,    // [جديد] مخزن العمولات
             netRevenue: 0,   // [جديد] الصافي بعد العمولات
-            paidRevenue: 0, confirmedRevenue: 0, pendingRevenue: 0, cancelledRevenue: 0,
-            totalTx: dataSet.length, paidTx: 0, confirmedTx: 0, pendingTx: 0, cancelledTx: 0,
+            deliveredRevenue: 0, paidRevenue: 0, confirmedRevenue: 0, pendingRevenue: 0, cancelledRevenue: 0,
+            totalTx: dataSet.length, deliveredTx: 0, paidTx: 0, confirmedTx: 0, pendingTx: 0, cancelledTx: 0,
             // العدادات لكل نوع
             cashplusCount: 0, cardCount: 0, cashCount: 0, bankCount: 0,
             // الإيرادات لكل نوع (للمدفوع فقط)
@@ -880,9 +879,15 @@ class AdminDashboard {
             else if (pm.includes('bank') || pm === 'virement') stats.bankCount++;
 
             switch (item.status) {
+                case 'delivered':
                 case 'paid':
-                    stats.paidTx++;
-                    stats.paidRevenue += amount;
+                    if (item.status === 'delivered') {
+                        stats.deliveredTx++;
+                        stats.deliveredRevenue += amount;
+                    } else {
+                        stats.paidTx++;
+                        stats.paidRevenue += amount;
+                    }
                     stats.totalRevenue += amount; // Revenue المجمع
                     // --- [إضافة جديدة: حساب العمولات] ---
                     // الخصم: 3.9% + 2 درهم (للبطاقة وكاش بلوس فقط)
@@ -933,7 +938,7 @@ class AdminDashboard {
         let totalGatewayFees = 0;
 
         dataSet.forEach(item => {
-            if (item.status !== 'cancelled' && item.status !== 'canceled') {
+            if (item.status === 'delivered' || item.status === 'paid') {
                 const amount = item.finalAmount || 0;
                 totalRevenue += amount;
                 totalPaidTx++;
@@ -999,7 +1004,7 @@ class AdminDashboard {
         // --- A. Daily Revenue Trend (Chart.js Line) ---
         const dailyRevenue = {};
         dataSet.forEach(item => {
-            if (item.status === 'paid' && item.parsedDate) {
+            if ((item.status === 'delivered' || item.status === 'paid') && item.parsedDate) {
                 const dateKey = item.parsedDate.toISOString().split('T')[0];
                 dailyRevenue[dateKey] = (dailyRevenue[dateKey] || 0) + item.finalAmount;
             }
@@ -1051,7 +1056,7 @@ class AdminDashboard {
             const k = item.parsedDate.toISOString().split('T')[0];
             if (!funnelData[k]) funnelData[k] = { inq: 0, conv: 0 };
             funnelData[k].inq++; // كل صف هو طلب
-            if (item.status === 'paid') funnelData[k].conv++; // التحويل الناجح
+            if (item.status === 'delivered' || item.status === 'paid') funnelData[k].conv++; // التحويل الناجح
         });
         const fDates = Object.keys(funnelData).sort();
 
@@ -1061,7 +1066,7 @@ class AdminDashboard {
                 labels: fDates,
                 datasets: [
                     { label: 'الطلبات (Inquiries)', data: fDates.map(d => funnelData[d].inq), backgroundColor: 'rgba(37, 99, 235, 0.6)', order: 2 },
-                    { label: 'المدفوع (Paid)', data: fDates.map(d => funnelData[d].conv), backgroundColor: 'rgba(16, 185, 129, 0.8)', order: 3 },
+                    { label: 'عملية ناجحة (Paid/Delivered)', data: fDates.map(d => funnelData[d].conv), backgroundColor: 'rgba(16, 185, 129, 0.8)', order: 3 },
                     {
                         type: 'line', label: 'نسبة التحويل %',
                         data: fDates.map(d => funnelData[d].inq > 0 ? (funnelData[d].conv / funnelData[d].inq) * 100 : 0),
@@ -1147,7 +1152,7 @@ class AdminDashboard {
             let totalGatewayFees = 0;
 
             dataSet.forEach(item => {
-                if (item.status !== 'cancelled' && item.status !== 'canceled') {
+                if (item.status === 'delivered' || item.status === 'paid') {
                     const amount = item.finalAmount || 0;
                     totalRevenue += amount;
                     totalPaidTx++;
@@ -1290,17 +1295,18 @@ class AdminDashboard {
     // رسم توزيع حالات الطلب (بديل Experience)
     renderStatusDistributionChart(dataSet) {
         if (!document.getElementById('status-chart')) return;
-        const counts = { 'Pending ⏳': 0, 'Confirmed ✅': 0, 'Paid / Delivered 📦': 0, 'Canceled ❌': 0 };
+        const counts = { 'Pending ⏳': 0, 'Confirmed ✅': 0, 'Paid 💳': 0, 'Delivered 📦': 0, 'Canceled ❌': 0 };
         dataSet.forEach(item => {
             const s = (item.status || 'pending').toLowerCase();
             if (s === 'confirmed') counts['Confirmed ✅']++;
-            else if (s === 'paid') counts['Paid / Delivered 📦']++;
+            else if (s === 'delivered') counts['Delivered 📦']++;
+            else if (s === 'paid') counts['Paid 💳']++;
             else if (s === 'cancelled' || s === 'canceled') counts['Canceled ❌']++;
             else counts['Pending ⏳']++;
         });
         this.renderChart('status-chart', 'statusDist', 'doughnut', {
             labels: Object.keys(counts),
-            datasets: [{ data: Object.values(counts), backgroundColor: ['#F59E0B', '#27ae60', '#3B82F6', '#EF4444'], borderWidth: 0 }]
+            datasets: [{ data: Object.values(counts), backgroundColor: ['#F59E0B', '#27ae60', '#3B82F6', '#10B981', '#EF4444'], borderWidth: 0 }]
         }, {});
     }
 
@@ -1387,13 +1393,13 @@ class AdminDashboard {
             }
 
             cmp.total++;
-            if (item.status === 'paid') {
+            if (item.status === 'delivered' || item.status === 'paid') {
                 cmp.paid++;
                 cmp.revenue += item.finalAmount;
             }
 
             // تفاصيل
-            const isPaid = (item.status === 'paid');
+            const isPaid = (item.status === 'delivered' || item.status === 'paid');
             const amount = item.finalAmount;
             const source = item.utm_source || 'Direct';
             const medium = item.utm_medium || '-';
@@ -1735,7 +1741,7 @@ class AdminDashboard {
             cmp.leads++;
 
             // [NEW] Aggregate Revenue
-            if (item.status === 'paid') {
+            if (item.status === 'delivered' || item.status === 'paid') {
                 cmp.paid++;
                 cmp.revenue += (parseFloat(item.finalAmount) || 0);
             }
@@ -1983,7 +1989,7 @@ class AdminDashboard {
         // تحديث العمود الأيمن (الإجمالي)
         this.renderRevCard('revenue-stats-breakdown', overall);
         this.renderSimpleCard('total-payments-stats', overall.totalTx, overall.cashplusCount, overall.cardCount, 'text-white');
-        this.renderSimpleCard('paid-payments-stats', overall.paidTx, overall.paid_cashplus, overall.paid_card, 'text-green-400');
+        this.renderSimpleCard('paid-payments-stats', overall.deliveredTx + overall.paidTx, overall.paid_cashplus, overall.paid_card, 'text-green-400');
         this.renderSimpleCard('pending-payments-stats', overall.pendingTx, 0, 0, 'text-yellow-400');
         this.renderSimpleCard('confirmed-payments-stats', overall.confirmedTx, 0, 0, 'text-teal-400');
         this.renderSimpleCard('canceled-payments-stats', overall.cancelledTx, 0, 0, 'text-red-400');
@@ -1991,7 +1997,7 @@ class AdminDashboard {
         // تحديث العمود الأيسر (المفلتر)
         this.renderRevCard('filtered-revenue-stats-breakdown', filtered);
         this.renderSimpleCard('filtered-total-payments-stats', filtered.totalTx, filtered.cashplusCount, filtered.cardCount, 'text-white');
-        this.renderSimpleCard('filtered-paid-payments-stats', filtered.paidTx, filtered.paid_cashplus, filtered.paid_card, 'text-green-400');
+        this.renderSimpleCard('filtered-paid-payments-stats', filtered.deliveredTx + filtered.paidTx, filtered.paid_cashplus, filtered.paid_card, 'text-green-400');
         this.renderSimpleCard('filtered-pending-payments-stats', filtered.pendingTx, 0, 0, 'text-yellow-400');
         this.renderSimpleCard('filtered-confirmed-payments-stats', filtered.confirmedTx, 0, 0, 'text-teal-400');
         this.renderSimpleCard('filtered-canceled-payments-stats', filtered.cancelledTx, 0, 0, 'text-red-400');
@@ -2002,8 +2008,8 @@ class AdminDashboard {
         if (!el) return;
 
         // 1. الحسابات الأساسية للإجمالي والنسبة العامة
-        const total = s.paidRevenue + s.confirmedRevenue + s.pendingRevenue + s.cancelledRevenue;
-        const pct = total > 0 ? ((s.paidRevenue / total) * 100).toFixed(1) : 0;
+        const total = s.deliveredRevenue + s.paidRevenue + s.confirmedRevenue + s.pendingRevenue + s.cancelledRevenue;
+        const pct = total > 0 ? ((s.deliveredRevenue / total) * 100).toFixed(1) : 0;
 
         // 2. حساب إجمالي الإيرادات المدفوعة من جميع القنوات
         const totalPaidMethods = (s.net_cashplus_revenue || 0) +
@@ -2018,7 +2024,8 @@ class AdminDashboard {
         const bankPercent = totalPaidMethods > 0 ? ((s.net_bank_revenue / totalPaidMethods) * 100).toFixed(1) : 0;
 
         // 4. تنسيق الأرقام للعرض (أضفنا فواصل الآلاف)
-        const fNet = s.paidRevenue.toLocaleString();
+        const fNet = s.deliveredRevenue.toLocaleString();
+        const fPaid = s.paidRevenue.toLocaleString();
         const fConfirmed = s.confirmedRevenue.toLocaleString();
         const fPending = s.pendingRevenue.toLocaleString();
         const fCanceled = s.cancelledRevenue.toLocaleString();
@@ -2030,12 +2037,13 @@ class AdminDashboard {
 
         // 5. بناء HTML البطاقة
         el.innerHTML = `
-        <div class="text-3xl font-bold text-green-400 mt-2" title="صافي الإيرادات المدفوعة">
+        <div class="text-3xl font-bold text-green-400 mt-2" title="إيرادات تم تسليمها">
             ${fNet} MAD 
             <span class="text-lg text-green-400/80">(${pct}%)</span>
         </div>
         
         <div class="mt-2 text-xs text-slate-400 space-y-1 border-t border-slate-700/50 pt-2">
+            <div class="flex justify-between"><span>مدفوع (Paid):</span> <span class="font-medium text-blue-400">${fPaid} MAD</span></div>
             <div class="flex justify-between"><span>مؤكد (Confirmed):</span> <span class="font-medium text-teal-400">${fConfirmed} MAD</span></div>
             <div class="flex justify-between"><span>معلق (Pending):</span> <span class="font-medium text-yellow-400">${fPending} MAD</span></div>
             <div class="flex justify-between"><span>ملغي/فاشل (Canceled):</span> <span class="font-medium text-red-400">${fCanceled} MAD</span></div>
@@ -2152,7 +2160,7 @@ class AdminDashboard {
                 ${(item.status === 'cancelled' || item.status === 'canceled') && item.deliveryNote ? `<div class="mt-2 text-[10px] text-red-400 max-w-[120px] whitespace-normal bg-red-900/10 p-1.5 rounded border border-red-900/30">السبب: ${this.sanitizeHTML(item.deliveryNote)}</div>` : ''}
             </td>
             <td class="px-6 py-4 text-xs text-slate-400 font-mono">
-                <div class="font-bold text-white">${this.sanitizeHTML(item.inquiryId)}</div>
+                <div class="font-bold text-white">${this.sanitizeHTML(item.orderId)}</div>
                 ${item.transactionId ? `<div class="text-slate-500 mt-0.5 text-[10px]">${this.sanitizeHTML(item.transactionId)}</div>` : ''}
             </td>
             <td class="px-6 py-4 text-sm">
@@ -2220,7 +2228,8 @@ class AdminDashboard {
                     <option value="">— الحالة الحالية: ${this.getStatusInfo(row.status).text} —</option>
                     <option value="pending">⏳ Pending (معلق)</option>
                     <option value="confirmed">✅ Confirmed (مؤكد)</option>
-                    <option value="paid">📦 Delivered/Paid (تم التسليم/مدفوع)</option>
+                    <option value="delivered">📦 Delivered (تم التسليم)</option>
+                    <option value="paid">💳 Paid (مدفوع)</option>
                     <option value="cancelled">❌ Canceled (ملغي)</option>
                 </select>
             </div>
@@ -2234,7 +2243,7 @@ class AdminDashboard {
             const noteText = modal.querySelector('#followup-note').value.trim();
 
             const payload = { 
-                originalInquiryId: row.inquiryId, 
+                originalOrderId: row.orderId, 
                 status: newStatus 
             };
             if (noteText || noteText === '') {
@@ -2850,7 +2859,7 @@ class AdminDashboard {
             const btn = m.querySelector('#del-confirm');
             btn.textContent = 'جاري الحذف...';
             btn.disabled = true;
-            await this.doDelete(item.inquiryId || item.transactionId);
+            await this.doDelete(item.orderId || item.transactionId);
             m.remove();
         };
     }
@@ -2891,7 +2900,7 @@ class AdminDashboard {
         const h = `
         <form id="e-form" class="space-y-3 text-right" dir="rtl">
             <div class="bg-yellow-900/20 p-2 rounded text-xs text-yellow-200 mb-2 border border-yellow-700/50">
-                تعديل السجل رقم: <b class="font-mono">${item.inquiryId}</b>
+                تعديل السجل رقم: <b class="font-mono">${item.orderId}</b>
             </div>
             
             <div class="grid grid-cols-2 gap-3">
@@ -2968,7 +2977,7 @@ class AdminDashboard {
 
             const fd = new FormData(m.querySelector('#e-form'));
             const payload = {
-                originalInquiryId: item.inquiryId,
+                originalOrderId: item.orderId,
                 ...Object.fromEntries(fd)
             };
 
@@ -3253,7 +3262,7 @@ class AdminDashboard {
                 paymentMethod: 'COD',
 
                 // حقول النظام والتتبع
-                inquiryId: `MANUAL-${Date.now()}`,
+                orderId: `MANUAL-${Date.now()}`,
                 utm_source: fd.get('utm_source'),
                 utm_medium: fd.get('utm_medium'),
                 utm_campaign: fd.get('utm_campaign'),
