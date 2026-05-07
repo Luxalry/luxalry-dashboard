@@ -177,11 +177,21 @@ class AdminDashboard {
 
             // Get selected data source
             const dataSourceSelect = document.getElementById('data-source-select');
-            const dataSource = dataSourceSelect ? dataSourceSelect.value : 'sheets';
+            const dataSource = dataSourceSelect ? dataSourceSelect.value : 'supabase'; // DEFAULT TO SUPABASE
 
             // Append dataSource to URL
             const url = new URL(this.API_URL);
             url.searchParams.append('dataSource', dataSource);
+
+            // Append date filters to fetch only the needed data from the server
+            const dateFilter = document.getElementById('date-filter')?.value || 'month'; // Default to last 30 days
+            url.searchParams.append('dateFilter', dateFilter);
+            if (dateFilter === 'custom') {
+                const startDate = document.getElementById('start-date')?.value;
+                const endDate = document.getElementById('end-date')?.value;
+                if (startDate) url.searchParams.append('startDate', startDate);
+                if (endDate) url.searchParams.append('endDate', endDate);
+            }
 
             const response = await fetch(url.toString(), {
                 method: 'GET',
@@ -4006,12 +4016,22 @@ class AdminDashboard {
         document.getElementById('desktop-filter-toggle')?.addEventListener('click', toggleFilter);
 
         // باقي الفلاتر كما هي...
-        ['search-input', 'status-filter', 'payment-filter', 'product-filter', 'campaign-filter', 'utm-id-filter', 'date-filter', 'start-date', 'end-date'].forEach(id => {
+        ['search-input', 'status-filter', 'payment-filter', 'product-filter', 'campaign-filter', 'utm-id-filter'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 // Trigger on 'input' for text fields, 'change' for selects
                 const eventType = (id.includes('input') || id === 'utm-id-filter') ? 'input' : 'change';
                 el.addEventListener(eventType, () => this.applyLocalFilters());
+            }
+        });
+
+        // Date filters trigger server-side re-fetch to optimize performance
+        ['date-filter', 'start-date', 'end-date', 'date-filter-desktop'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', () => {
+                    this.fetchAllData(); 
+                });
             }
         });
 
