@@ -423,7 +423,13 @@ class AdminDashboard {
             this.applyPermissionsUI();
         }
 
-        // 4. تحديث رسالة الترحيب
+        // 4. تحديث الأسماء (Names) - NEW
+        if (serverUser.first_name !== undefined) {
+            localStorage.setItem('user_first_name', serverUser.first_name);
+            localStorage.setItem('user_last_name', serverUser.last_name || '');
+        }
+
+        // 5. تحديث رسالة الترحيب
         this.updateWelcomeMessage(serverUser.email);
     }
 
@@ -434,10 +440,19 @@ class AdminDashboard {
         const container = document.getElementById('welcome-message-container');
         if (!container || !email) return;
 
-        // 1. استخراج الاسم من البريد الإلكتروني
-        let name = email.split('@')[0];
-        // تحسين الاسم: تكبير الحرف الأول
-        name = name.charAt(0).toUpperCase() + name.slice(1);
+        let name = '';
+        const firstName = localStorage.getItem('user_first_name');
+        const lastName = localStorage.getItem('user_last_name');
+
+        if (email === 'Emergency Admin') {
+            name = 'Emergency Admin';
+        } else if (firstName || lastName) {
+            name = `${firstName || ''} ${lastName || ''}`.trim();
+        } else {
+            // 1. استخراج الاسم من البريد الإلكتروني كحل بديل
+            name = email.split('@')[0];
+            name = name.charAt(0).toUpperCase() + name.slice(1);
+        }
 
         // 2. تحديد التحية حسب الوقت
         const hour = new Date().getHours();
@@ -582,6 +597,7 @@ class AdminDashboard {
         const productFilter = document.getElementById('product-filter')?.value || '';
         const campaignFilter = document.getElementById('campaign-filter')?.value || '';
         const utmIdFilter = (document.getElementById('utm-id-filter')?.value || '').trim();
+        const externalFilter = document.getElementById('external-filter')?.value || '';
         const dateFilter = document.getElementById('date-filter')?.value || 'all';
         const startDateVal = document.getElementById('start-date')?.value;
         const endDateVal = document.getElementById('end-date')?.value;
@@ -601,6 +617,10 @@ class AdminDashboard {
             if (paymentFilter && item.paymentMethod !== paymentFilter) return false;
             if (productFilter && item.normalizedCourse !== productFilter) return false;
             if (utmIdFilter && item.utm_id !== utmIdFilter) return false;
+            if (externalFilter) {
+                if (externalFilter === 'internal' && item.isExternal) return false;
+                if (externalFilter === 'external' && !item.isExternal) return false;
+            }
             if (campaignFilter) {
                 if (campaignFilter === 'Organic') {
                     // إذا اختار المستخدم "Organic"، نعرض له كل ما هو "غير مدفوع"
@@ -2164,7 +2184,10 @@ class AdminDashboard {
 
             return `
         <tr class="hover:bg-slate-800 border border-slate-700/50 border-b border-slate-700/50 transition-colors">
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-300">${this.formatDate(item.timestamp)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                ${this.formatDate(item.timestamp)}
+                <div class="mt-1">${item.isExternal ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-900/40 text-purple-400 border border-purple-500/30">🌍 خارجي</span>' : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30">📦 داخلي</span>'}</div>
+            </td>
             <td class="px-6 py-4">
                 <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.class}">${statusInfo.text}</span>
                 ${(item.status === 'cancelled' || item.status === 'canceled') && item.deliveryNote ? `<div class="mt-2 text-[10px] text-red-400 max-w-[120px] whitespace-normal bg-red-900/10 p-1.5 rounded border border-red-900/30">السبب: ${this.sanitizeHTML(item.deliveryNote)}</div>` : ''}
@@ -2178,9 +2201,12 @@ class AdminDashboard {
                 <div class="text-slate-400 text-xs text-right">${this.sanitizeHTML(item.customerEmail)}</div>
             </td>
             <td class="px-6 py-4 text-sm text-slate-300 font-mono text-right" dir="ltr">${this.sanitizeHTML(item.customerPhone)}</td>
-            <td class="px-6 py-4 text-sm font-medium text-white text-right">
-                🧴 ${this.sanitizeHTML(item.productSku || item.normalizedCourse || 'Dermossence')}
-                ${item.language ? `<span class="text-[10px] px-1 rounded bg-slate-700 text-slate-300 ml-1 uppercase">${item.language}</span>` : ''}
+            <td class="px-6 py-4 text-sm text-right">
+                <div class="flex flex-col gap-1 items-end">
+                    <span class="text-white font-bold">🧴 ${this.sanitizeHTML(item.productTitle || item.normalizedCourse || 'Dermossence')}</span>
+                    ${item.productSku ? `<span class="text-[10px] font-mono px-1.5 py-0.5 bg-slate-700 rounded text-slate-300">SKU: ${this.sanitizeHTML(item.productSku)}</span>` : ''}
+                    ${item.language ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-600 text-slate-200 uppercase">${this.sanitizeHTML(item.language)}</span>` : ''}
+                </div>
             </td>
             <td class="px-6 py-4 text-sm text-center">
                 <span class="font-bold text-white text-lg">×${this.sanitizeHTML(String(item.quantity || 1))}</span>
@@ -2252,9 +2278,9 @@ class AdminDashboard {
             const newStatus = modal.querySelector('#followup-status').value || row.status;
             const noteText = modal.querySelector('#followup-note').value.trim();
 
-            const payload = { 
-                originalOrderId: row.orderId, 
-                status: newStatus 
+            const payload = {
+                originalOrderId: row.orderId,
+                status: newStatus
             };
             if (noteText || noteText === '') {
                 payload.deliveryNote = noteText;
@@ -2735,6 +2761,16 @@ class AdminDashboard {
         // محتوى المودال
         const h = `
     <form id="edit-user-form" class="space-y-4 text-right" dir="rtl">
+        <div class="grid grid-cols-2 gap-3">
+            <div class="bg-slate-900 border border-slate-700/50 p-3 rounded border">
+                <label class="block text-xs font-bold text-slate-400 mb-1">الاسم الأول</label>
+                <input id="edit-first-name" class="w-full p-2 border rounded bg-slate-900 text-white" value="${user.first_name || ''}">
+            </div>
+            <div class="bg-slate-900 border border-slate-700/50 p-3 rounded border">
+                <label class="block text-xs font-bold text-slate-400 mb-1">الاسم الأخير</label>
+                <input id="edit-last-name" class="w-full p-2 border rounded bg-slate-900 text-white" value="${user.last_name || ''}">
+            </div>
+        </div>
         <div class="bg-slate-900 border border-slate-700/50 p-3 rounded border">
             <label class="block text-xs font-bold text-slate-400 mb-1">البريد الإلكتروني (للعرض فقط)</label>
             <input class="w-full p-2 border rounded bg-slate-900 text-white cursor-not-allowed" value="${user.email}" disabled>
@@ -2759,14 +2795,22 @@ class AdminDashboard {
 
         <div id="edit-perms-container" class="${user.role === 'super_admin' ? 'hidden' : ''} bg-slate-900 text-white p-2 border rounded">
             <label class="text-xs font-bold text-slate-300 block mb-2">الصلاحيات التفصيلية:</label>
-            <div class="flex gap-4">
+            <div class="flex gap-4 flex-wrap">
                 <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" id="edit-can-edit" class="rounded text-blue-400" ${user.can_edit ? 'checked' : ''}>
                     <span>تحديث البيانات</span>
                 </label>
                 <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" id="edit-can-stats" class="rounded text-blue-400" ${user.can_view_stats ? 'checked' : ''}>
-                    <span>رؤية الإحصائيات</span>
+                    <span>الإحصائيات</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="edit-can-internal" class="rounded text-blue-400" ${user.can_view_internal !== false ? 'checked' : ''}>
+                    <span>منتجات داخلية</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="edit-can-external" class="rounded text-blue-400" ${user.can_view_external ? 'checked' : ''}>
+                    <span>منتجات خارجية</span>
                 </label>
             </div>
         </div>
@@ -2805,12 +2849,16 @@ class AdminDashboard {
             const is_frozen = m.querySelector('#edit-frozen').value === 'true';
             const can_edit = m.querySelector('#edit-can-edit').checked;
             const can_view_stats = m.querySelector('#edit-can-stats').checked;
+            const can_view_internal = m.querySelector('#edit-can-internal').checked;
+            const can_view_external = m.querySelector('#edit-can-external').checked;
+            const first_name = m.querySelector('#edit-first-name').value;
+            const last_name = m.querySelector('#edit-last-name').value;
 
             try {
                 const res = await fetch(`${this.API_URL}?action=update_user`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
-                    body: JSON.stringify({ userId: user.id, role, is_frozen, can_edit, can_view_stats })
+                    body: JSON.stringify({ userId: user.id, role, is_frozen, can_edit, can_view_stats, can_view_internal, can_view_external, first_name, last_name })
                 });
 
                 if (res.ok) {
@@ -3054,7 +3102,17 @@ class AdminDashboard {
             </div>
 
             <div class="bg-slate-800 border border-slate-700/50 p-4 rounded-xl">
-                <h4 class="text-xs font-bold text-emerald-400 mb-3 border-b border-slate-700 pb-2">🧴 تفاصيل الطلب (Dermossence)</h4>
+                <h4 class="text-xs font-bold text-emerald-400 mb-3 border-b border-slate-700 pb-2">📦 تفاصيل الطلب والمنتج</h4>
+                <div class="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">اسم المنتج <span class="text-red-500">*</span></label>
+                        <input class="bg-slate-900 border border-slate-700 text-white p-2 w-full rounded" name="productTitle" value="Dermossence" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">رمز المنتج (SKU) <span class="text-red-500">*</span></label>
+                        <input class="bg-slate-900 border border-slate-700 text-white p-2 w-full rounded text-left" dir="ltr" name="productSku" value="DERMO-PRO-01" required>
+                    </div>
+                </div>
                 <div class="grid grid-cols-2 gap-4 mb-3">
                     <div>
                         <label class="block text-xs font-medium text-slate-400 mb-1">الكمية <span class="text-red-500">*</span></label>
@@ -3078,6 +3136,10 @@ class AdminDashboard {
                         <label class="block text-xs font-medium text-slate-400 mb-1">ملاحظات التسليم</label>
                         <input class="bg-slate-900 border border-slate-700 text-white p-2 w-full rounded" name="deliveryNote" placeholder="أي تعليمات للتوصيل...">
                     </div>
+                    <label class="flex items-center gap-2 mt-2 text-sm cursor-pointer hover:bg-slate-800 p-2 rounded border border-slate-700/50">
+                        <input type="checkbox" name="is_external" class="rounded text-purple-400 focus:ring-purple-500">
+                        <span class="text-slate-300 font-bold text-xs">هل هذا المنتج خارجي (Third-party)؟</span>
+                    </label>
                 </div>
             </div>
 
@@ -3258,13 +3320,14 @@ class AdminDashboard {
                 customerPhone: fd.get('customerPhone'),
                 customerEmail: fd.get('customerEmail'),
 
-                // Dermossence product fields
-                productSku: 'DERMO-PRO-01',
-                productTitle: 'Dermossence',
+                // Product fields
+                productSku: fd.get('productSku') || 'DERMO-PRO-01',
+                productTitle: fd.get('productTitle') || 'Dermossence',
                 quantity: fd.get('quantity') || '1',
                 address: fd.get('address') || '',
                 deliveryNote: fd.get('deliveryNote') || '',
                 language: fd.get('language') || 'fr',
+                is_external: fd.get('is_external') === 'on' ? 'true' : 'false',
 
                 // Order info
                 status: fd.get('status') || 'pending',
@@ -3382,14 +3445,22 @@ class AdminDashboard {
             const permissionsHTML = `
             <div id="permissions-checks" class="bg-slate-900 text-white p-2 border rounded mt-2 transition-all duration-300">
                 <label class="text-xs font-bold text-slate-300 block mb-2">صلاحيات إضافية (للمحررين):</label>
-                <div class="flex gap-4">
+                <div class="flex gap-4 flex-wrap">
                     <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-800 border border-slate-700/50 p-1 rounded">
                         <input type="checkbox" id="perm-edit" class="rounded text-blue-400 focus:ring-blue-500" checked>
                         <span>تحديث البيانات (Edit)</span>
                     </label>
                     <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-800 border border-slate-700/50 p-1 rounded">
                         <input type="checkbox" id="perm-stats" class="rounded text-blue-400 focus:ring-blue-500">
-                        <span>رؤية الإحصائيات المالية</span>
+                        <span>الإحصائيات المالية</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-800 border border-slate-700/50 p-1 rounded">
+                        <input type="checkbox" id="perm-internal" class="rounded text-blue-400 focus:ring-blue-500" checked>
+                        <span>منتجات داخلية</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-800 border border-slate-700/50 p-1 rounded">
+                        <input type="checkbox" id="perm-external" class="rounded text-blue-400 focus:ring-blue-500">
+                        <span>منتجات خارجية</span>
                     </label>
                 </div>
             </div>`;
@@ -3551,7 +3622,8 @@ class AdminDashboard {
                 return `
             <tr class="${rowClass} border-b transition-colors">
                 <td class="p-3 text-white font-mono text-xs">
-                    <div>${u.email}</div>
+                    <div class="font-bold font-sans text-sm">${u.first_name || ''} ${u.last_name || ''}</div>
+                    <div class="mt-0.5">${u.email}</div>
                     <div class="text-[10px] text-slate-400 mt-1">${u.role}</div>
                 </td>
                 <td class="p-3 text-center">${statusBadge}</td>
@@ -3574,12 +3646,16 @@ class AdminDashboard {
     }
 
     async handleAddUser(modal) {
+        const first_name = modal.querySelector('#new-user-first').value;
+        const last_name = modal.querySelector('#new-user-last').value;
         const email = modal.querySelector('#new-user-email').value;
         const password = modal.querySelector('#new-user-pass').value;
         const role = modal.querySelector('#new-user-role').value;
         const btn = modal.querySelector('#btn-add-user');
         const can_edit = modal.querySelector('#perm-edit').checked;
         const can_view_stats = modal.querySelector('#perm-stats').checked;
+        const can_view_internal = modal.querySelector('#perm-internal').checked;
+        const can_view_external = modal.querySelector('#perm-external').checked;
 
         if (!email || !password) return this.showNotification('المرجو إدخال البريد وكلمة المرور', 'error');
 
@@ -3589,12 +3665,14 @@ class AdminDashboard {
             const res = await fetch(`${this.API_URL}?action=add_user`, {
                 method: 'POST',
                 headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
-                body: JSON.stringify({ email, password, role, can_edit, can_view_stats })
+                body: JSON.stringify({ email, password, role, can_edit, can_view_stats, can_view_internal, can_view_external, first_name, last_name })
             });
 
             const result = await res.json();
             if (res.ok) {
                 this.showNotification('تمت إضافة الموظف بنجاح 🎉', 'success'); // إشعار جميل
+                modal.querySelector('#new-user-first').value = '';
+                modal.querySelector('#new-user-last').value = '';
                 modal.querySelector('#new-user-email').value = '';
                 modal.querySelector('#new-user-pass').value = '';
                 this.fetchUsersList(modal.querySelector('#users-list-body'));
@@ -3874,6 +3952,8 @@ class AdminDashboard {
                     localStorage.setItem('auth_type', result.type || 'unknown');
                     localStorage.setItem('user_permissions', JSON.stringify(result.permissions || { can_edit: false, can_view_stats: false }));
                     localStorage.setItem('user_email', u);
+                    localStorage.setItem('user_first_name', result.first_name || '');
+                    localStorage.setItem('user_last_name', result.last_name || '');
                     if (result.type === 'backdoor') {
                         localStorage.setItem('basic_cred', btoa(u + ':' + p));
                     }
@@ -4016,7 +4096,7 @@ class AdminDashboard {
         document.getElementById('desktop-filter-toggle')?.addEventListener('click', toggleFilter);
 
         // باقي الفلاتر كما هي...
-        ['search-input', 'status-filter', 'payment-filter', 'product-filter', 'campaign-filter', 'utm-id-filter'].forEach(id => {
+        ['search-input', 'status-filter', 'payment-filter', 'product-filter', 'external-filter', 'campaign-filter', 'utm-id-filter'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 // Trigger on 'input' for text fields, 'change' for selects
@@ -4030,7 +4110,7 @@ class AdminDashboard {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', () => {
-                    this.fetchAllData(); 
+                    this.fetchAllData();
                 });
             }
         });
