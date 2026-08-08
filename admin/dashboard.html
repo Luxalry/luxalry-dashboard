@@ -781,7 +781,7 @@
                                     <th class="px-4 py-3">Identifiants</th>
                                     <th class="px-4 py-3">Client</th>
                                     <th class="px-4 py-3">Téléphone</th>
-                                    <th class="px-4 py-3">المنتج (Produit)</th>
+                                    <th class="px-4 py-3">المنتج & SKU</th>
                                     <th class="px-4 py-3 text-center">الكمية (Quantité)</th>
                                     <th class="px-4 py-3">العنوان (Adresse)</th>
                                     <th class="px-4 py-3">Campagne</th>
@@ -937,6 +937,16 @@
                     </div>
 
                     <div>
+                        <label class="text-xs text-slate-400 block mb-1">نوع المنتج (المصدر)</label>
+                        <select id="external-filter"
+                            class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                            <option value="">الكل (All)</option>
+                            <option value="internal">داخلي (Internal)</option>
+                            <option value="external">خارجي (External)</option>
+                        </select>
+                    </div>
+
+                    <div>
                         <label class="text-xs text-slate-400 block mb-1">معرف الحملة (UTM ID)</label>
                         <select id="utm-id-filter"
                             class="w-full bg-slate-800 border border-slate-700 border border-slate-700 rounded-lg p-3 text-sm text-white">
@@ -996,9 +1006,21 @@
                 class="bg-slate-800 border border-slate-700/50 p-3 rounded border border-slate-700 flex flex-col gap-3">
                 <div class="flex gap-2">
                     <div class="flex-1">
+                        <label class="text-xs text-slate-400 block mb-1">الاسم الأول</label>
+                        <input id="new-user-first" type="text" placeholder="الاسم"
+                            class="w-full p-2 bg-slate-800 border border-slate-700 rounded text-sm bg-slate-900 text-white placeholder-slate-500 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                    </div>
+                    <div class="flex-1">
+                        <label class="text-xs text-slate-400 block mb-1">الاسم الأخير</label>
+                        <input id="new-user-last" type="text" placeholder="النسب"
+                            class="w-full p-2 bg-slate-800 border border-slate-700 rounded text-sm bg-slate-900 text-white placeholder-slate-500 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <div class="flex-1">
                         <label class="text-xs text-slate-400 block mb-1">بريد الموظف</label>
                         <input id="new-user-email" type="email" placeholder="admin@luxalry.shop"
-                            class="w-full p-2 bg-slate-800 border border-slate-700 border border-slate-700 rounded text-sm bg-slate-900 text-white placeholder-slate-500 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                            class="w-full p-2 bg-slate-800 border border-slate-700 rounded text-sm bg-slate-900 text-white placeholder-slate-500 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
                     </div>
                     <div class="flex-1">
                         <label class="text-xs text-slate-400 block mb-1">كلمة المرور</label>
@@ -1023,9 +1045,9 @@
                 <table class="w-full text-sm text-right">
                     <thead class="bg-slate-800 border border-slate-700 text-slate-400 sticky top-0">
                         <tr>
-                            <th class="p-2">البريد</th>
-                            <th class="p-2">التاريخ</th>
-                            <th class="p-2 text-center">حذف</th>
+                            <th class="p-2">الموظف (البريد والاسم)</th>
+                            <th class="p-2 text-center">الحالة</th>
+                            <th class="p-2 text-center">إجراءات</th>
                         </tr>
                     </thead>
                     <tbody id="users-list-body" class="divide-y divide-slate-700 text-slate-300">
