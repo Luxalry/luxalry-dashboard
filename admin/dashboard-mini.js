@@ -32,74 +32,15 @@ class AdminDashboard {
             qualification: null
         };
 
-        this.API_URL = 'https://api.luxalry.ma/api/admin';
+        if (!window.APP_CONFIG || !window.APP_CONFIG.API_BASE_URL) {
+            console.error('CRITICAL ERROR: window.APP_CONFIG.API_BASE_URL is missing.');
+            document.body.innerHTML = '<div style="color:red; text-align:center; padding:50px; font-family:sans-serif;">System Configuration Error: Missing API Base URL.</div>';
+            throw new Error('Missing API_BASE_URL');
+        }
+        this.API_URL = window.APP_CONFIG.API_BASE_URL + '/api/admin';
         // Dermossence: no product lookup needed
 
         this.init();
-    }
-
-    // ============================================================
-    // (NEW) Centralized API Request Wrapper with Refresh Lock
-    // ============================================================
-    async apiFetch(url, options = {}) {
-        const authType = localStorage.getItem('auth_type') || sessionStorage.getItem('auth_type');
-        const isBackdoor = authType === 'backdoor' || authType === 'escalation';
-        
-        const token = isBackdoor ? sessionStorage.getItem('escalation_token') : localStorage.getItem('admin_token');
-        
-        options.headers = options.headers || {};
-        if (token) {
-            options.headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        if (!isBackdoor) {
-            options.credentials = 'include';
-        }
-        
-        let response = await window.fetch(url, options);
-        
-        if (response.status === 401) {
-            if (isBackdoor) {
-                this.logout();
-                throw new Error("Session expired.");
-            }
-            
-            if (!this.refreshPromise) {
-                this.refreshPromise = fetch(`${this.API_URL}?action=refresh`, {
-                    method: 'POST',
-                    credentials: 'include'
-                }).then(res => {
-                    this.refreshPromise = null;
-                    if (res.ok) return res.json();
-                    throw new Error("Refresh failed");
-                }).catch(err => {
-                    this.refreshPromise = null;
-                    throw err;
-                });
-            }
-            
-            try {
-                const refreshResult = await this.refreshPromise;
-                if (refreshResult.success && refreshResult.token) {
-                    localStorage.setItem('admin_token', refreshResult.token);
-                    options.headers['Authorization'] = `Bearer ${refreshResult.token}`;
-                    
-                    response = await window.fetch(url, options);
-                    if (response.status === 401) {
-                        this.logout();
-                        throw new Error("Session expired after refresh.");
-                    }
-                } else {
-                    this.logout();
-                    throw new Error("Session expired.");
-                }
-            } catch (err) {
-                this.logout();
-                throw err;
-            }
-        }
-        
-        return response;
     }
 
     // ============================================================
@@ -333,7 +274,7 @@ class AdminDashboard {
                 if (endDate) url.searchParams.append('endDate', endDate);
             }
 
-            const response = await this.apiFetch(url.toString(), {
+            const response = await fetch(url.toString(), {
                 method: 'GET',
                 headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders)
             });
@@ -492,7 +433,7 @@ class AdminDashboard {
     async debugConnection() {
         try {
             const authHeaders = this.getAuthHeaders();
-            const response = await this.apiFetch(this.API_URL, {
+            const response = await fetch(this.API_URL, {
                 headers: authHeaders
             });
             const text = await response.text();
@@ -666,7 +607,7 @@ class AdminDashboard {
     async fixMissingName(email) {
         if (!email) return;
         try {
-            const res = await this.apiFetch(`${this.API_URL}?action=get_users`, {
+            const res = await fetch(`${this.API_URL}?action=get_users`, {
                 headers: this.getAuthHeaders()
             });
             if (res.ok) {
@@ -2580,7 +2521,7 @@ class AdminDashboard {
         
         this.showNotification('Initiating WhatsApp retry...', 'info');
         try {
-            const res = await this.apiFetch(`${this.API_URL}?action=lifecycle-retry`, {
+            const res = await fetch(`${this.API_URL}?action=lifecycle-retry`, {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
                 body: JSON.stringify({ event_type: eventType, order_id: orderId })
@@ -2644,7 +2585,7 @@ class AdminDashboard {
             }
 
             try {
-                const res = await this.apiFetch(this.API_URL, {
+                const res = await fetch(this.API_URL, {
                     method: 'PUT',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -3212,7 +3153,7 @@ class AdminDashboard {
             const last_name = m.querySelector('#edit-last-name').value;
 
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=update_user`, {
+                const res = await fetch(`${this.API_URL}?action=update_user`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ userId: user.id, role, is_frozen, can_edit, can_view_stats, can_view_internal, can_view_external, first_name, last_name })
@@ -3245,7 +3186,7 @@ class AdminDashboard {
             // استخدام نافذة التأكيد الجديدة
             this.showCustomConfirm('هل أنت متأكد من تغيير كلمة المرور لهذا الموظف؟', async () => {
                 try {
-                    const res = await this.apiFetch(`${this.API_URL}?action=change_password`, {
+                    const res = await fetch(`${this.API_URL}?action=change_password`, {
                         method: 'POST',
                         headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                         body: JSON.stringify({ newPassword: newPass, userId: user.id })
@@ -3289,7 +3230,7 @@ class AdminDashboard {
 
     async doDelete(id) {
         try {
-            const res = await this.apiFetch(this.API_URL, {
+            const res = await fetch(this.API_URL, {
                 method: 'DELETE',
                 headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                 body: JSON.stringify({ id })
@@ -3409,7 +3350,7 @@ class AdminDashboard {
             };
 
             try {
-                const res = await this.apiFetch(this.API_URL, {
+                const res = await fetch(this.API_URL, {
                     method: 'PUT',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -3719,7 +3660,7 @@ class AdminDashboard {
 
             // الإرسال للسيرفر
             try {
-                const response = await this.apiFetch(this.API_URL, {
+                const response = await fetch(this.API_URL, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -3851,7 +3792,7 @@ class AdminDashboard {
             btnSaveInfo.disabled = true;
 
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=update_profile`, {
+                const res = await fetch(`${this.API_URL}?action=update_profile`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ first_name: fName, last_name: lName })
@@ -3887,7 +3828,7 @@ class AdminDashboard {
                     btnSavePass.disabled = true;
                     btnSavePass.textContent = 'جاري التحديث...';
                     
-                    const res = await this.apiFetch(`${this.API_URL}?action=change_password`, {
+                    const res = await fetch(`${this.API_URL}?action=change_password`, {
                         method: 'POST',
                         headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                         body: JSON.stringify({ newPassword })
@@ -4067,7 +4008,7 @@ class AdminDashboard {
 
     async fetchUsersList(tbody) {
         try {
-            const res = await this.apiFetch(`${this.API_URL}?action=get_users`, {
+            const res = await fetch(`${this.API_URL}?action=get_users`, {
                 method: 'GET',
                 headers: this.getAuthHeaders()
             });
@@ -4134,7 +4075,7 @@ class AdminDashboard {
         btn.textContent = '...'; btn.disabled = true;
 
         try {
-            const res = await this.apiFetch(`${this.API_URL}?action=add_user`, {
+            const res = await fetch(`${this.API_URL}?action=add_user`, {
                 method: 'POST',
                 headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                 body: JSON.stringify({ email, password, role, can_edit, can_view_stats, can_view_internal, can_view_external, first_name, last_name })
@@ -4161,7 +4102,7 @@ class AdminDashboard {
     async handleDeleteUserAction(userId) {
         this.showCustomConfirm('هل أنت متأكد من حذف هذا الموظف؟ سيتم منعه من الدخول فوراً.', async () => {
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=delete_user`, {
+                const res = await fetch(`${this.API_URL}?action=delete_user`, {
                     method: 'DELETE',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ userId })
@@ -4187,7 +4128,7 @@ class AdminDashboard {
 
         this.showCustomConfirm('هل أنت متأكد من تغيير كلمة المرور؟ سيتم تسجيل الخروج.', async () => {
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=change_password`, {
+                const res = await fetch(`${this.API_URL}?action=change_password`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ newPassword })
@@ -4322,7 +4263,7 @@ class AdminDashboard {
     async logout() {
         try {
             // 1. طلب تسجيل الخروج من السيرفر (لحذف الكوكيز إن وجدت)
-            await this.apiFetch(`${this.API_URL}?action=logout`, {
+            await fetch(`${this.API_URL}?action=logout`, {
                 method: 'POST',
                 // لا نحتاج لانتظار الرد، المهم إرسال الطلب
             });
@@ -4412,7 +4353,7 @@ class AdminDashboard {
             const p = document.getElementById('password').value;
 
             try {
-                const response = await this.apiFetch(this.API_URL, { // تأكد أن الرابط يدعم /login
+                const response = await fetch(this.API_URL, { // تأكد أن الرابط يدعم /login
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: u, password: p })
@@ -4714,7 +4655,7 @@ class AdminDashboard {
         // استبدال confirm بالنافذة المخصصة
         this.showCustomConfirm('هل أنت متأكد من حذف هذا السجل المالي؟', async () => {
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=delete_spend`, {
+                const res = await fetch(`${this.API_URL}?action=delete_spend`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ spendId: spendId })
@@ -4788,7 +4729,7 @@ class AdminDashboard {
             };
 
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=update_spend`, {
+                const res = await fetch(`${this.API_URL}?action=update_spend`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -5140,7 +5081,7 @@ class AdminDashboard {
             btn.textContent = 'جاري الحفظ...'; btn.disabled = true;
 
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=add_campaign`, {
+                const res = await fetch(`${this.API_URL}?action=add_campaign`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -5192,7 +5133,7 @@ class AdminDashboard {
     async deleteCampaign(name) {
         this.showCustomConfirm(`هل أنت متأكد من حذف الحملة "${name}"؟`, async () => {
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=delete_campaign`, {
+                const res = await fetch(`${this.API_URL}?action=delete_campaign`, {
                     method: 'DELETE',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ name })
@@ -5270,7 +5211,7 @@ class AdminDashboard {
             };
 
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=update_campaign`, {
+                const res = await fetch(`${this.API_URL}?action=update_campaign`, {
                     method: 'POST', // نستخدم POST لأننا عرفناه كذلك في الباكند للتحديث
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -5381,7 +5322,7 @@ class AdminDashboard {
             const payload = Object.fromEntries(fd.entries());
 
             try {
-                const res = await this.apiFetch(`${this.API_URL}?action=add_spend`, {
+                const res = await fetch(`${this.API_URL}?action=add_spend`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -5500,7 +5441,7 @@ class AdminDashboard {
         
         try {
             const authHeaders = this.getAuthHeaders();
-            const res = await this.apiFetch(`${this.API_URL}-whatsapp?action=conversations`, {
+            const res = await fetch(`${this.API_URL}-whatsapp?action=conversations`, {
                 headers: authHeaders
             });
             const data = await res.json();
@@ -5579,7 +5520,7 @@ class AdminDashboard {
         // Fetch messages
         try {
             const authHeaders = this.getAuthHeaders();
-            const res = await this.apiFetch(`${this.API_URL}-whatsapp?action=messages&conversationId=${conversation.id}`, {
+            const res = await fetch(`${this.API_URL}-whatsapp?action=messages&conversationId=${conversation.id}`, {
                 headers: authHeaders
             });
             const data = await res.json();
@@ -5637,7 +5578,7 @@ class AdminDashboard {
             textInput.disabled = true;
             
             try {
-                const res = await this.apiFetch(`${this.API_URL}-whatsapp?action=send`, {
+                const res = await fetch(`${this.API_URL}-whatsapp?action=send`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ conversationId: conversation.id, text: text })
