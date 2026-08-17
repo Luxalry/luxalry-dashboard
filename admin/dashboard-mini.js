@@ -39,6 +39,70 @@ class AdminDashboard {
     }
 
     // ============================================================
+    // (NEW) Centralized API Request Wrapper with Refresh Lock
+    // ============================================================
+    async apiFetch(url, options = {}) {
+        const authType = localStorage.getItem('auth_type') || sessionStorage.getItem('auth_type');
+        const isBackdoor = authType === 'backdoor' || authType === 'escalation';
+        
+        const token = isBackdoor ? sessionStorage.getItem('escalation_token') : localStorage.getItem('admin_token');
+        
+        options.headers = options.headers || {};
+        if (token) {
+            options.headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        if (!isBackdoor) {
+            options.credentials = 'include';
+        }
+        
+        let response = await window.fetch(url, options);
+        
+        if (response.status === 401) {
+            if (isBackdoor) {
+                this.logout();
+                throw new Error("Session expired.");
+            }
+            
+            if (!this.refreshPromise) {
+                this.refreshPromise = fetch(`${this.API_URL}?action=refresh`, {
+                    method: 'POST',
+                    credentials: 'include'
+                }).then(res => {
+                    this.refreshPromise = null;
+                    if (res.ok) return res.json();
+                    throw new Error("Refresh failed");
+                }).catch(err => {
+                    this.refreshPromise = null;
+                    throw err;
+                });
+            }
+            
+            try {
+                const refreshResult = await this.refreshPromise;
+                if (refreshResult.success && refreshResult.token) {
+                    localStorage.setItem('admin_token', refreshResult.token);
+                    options.headers['Authorization'] = `Bearer ${refreshResult.token}`;
+                    
+                    response = await window.fetch(url, options);
+                    if (response.status === 401) {
+                        this.logout();
+                        throw new Error("Session expired after refresh.");
+                    }
+                } else {
+                    this.logout();
+                    throw new Error("Session expired.");
+                }
+            } catch (err) {
+                this.logout();
+                throw err;
+            }
+        }
+        
+        return response;
+    }
+
+    // ============================================================
     // (NEW) Helper: Escape HTML to prevent XSS
     // ============================================================
     escapeHtml(text) {
@@ -132,6 +196,87 @@ class AdminDashboard {
     }
 
     // ============================================================
+    // (NEW) Popover system for compact table rows
+    // ============================================================
+    showPopover(event, element) {
+        event.stopPropagation();
+        const title = element.dataset.popoverTitle || '';
+        const content = element.dataset.popoverContent || '';
+        
+        let popover = document.getElementById('global-popover');
+        if (!popover) {
+            popover = document.createElement('div');
+            popover.id = 'global-popover';
+            popover.className = 'fixed z-[9999] bg-slate-800 border border-slate-700 rounded shadow-2xl overflow-hidden flex-col w-[320px] max-w-[90vw] text-left';
+            popover.style.display = 'none';
+            // RTL is default on body, we explicitly set RTL if needed, but let's inherit body dir which is RTL.
+            // But content should probably preserve its natural direction. 
+            popover.innerHTML = `
+                <div class="bg-slate-900/80 px-3 py-2 border-b border-slate-700/80 font-bold text-xs tracking-wider text-slate-300 popover-title flex items-center justify-between">
+                    <span class="title-text"></span>
+                    <button class="text-slate-500 hover:text-slate-300 transition-colors popover-close outline-none">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div class="p-3 text-sm text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[50vh] overflow-y-auto popover-content text-right" dir="auto"></div>
+            `;
+            document.body.appendChild(popover);
+            
+            // Close on click outside
+            document.addEventListener('click', (e) => {
+                if (popover.style.display !== 'none' && !popover.contains(e.target)) {
+                    popover.style.display = 'none';
+                }
+            });
+            // Close on escape
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && popover.style.display !== 'none') {
+                    popover.style.display = 'none';
+                }
+            });
+            // Close button
+            popover.querySelector('.popover-close').onclick = () => {
+                popover.style.display = 'none';
+            };
+        }
+
+        const titleEl = popover.querySelector('.title-text');
+        const contentEl = popover.querySelector('.popover-content');
+        
+        // Toggle if clicking the same trigger
+        if (popover.style.display !== 'none' && popover.dataset.triggerId === title + content.substring(0,20)) {
+            popover.style.display = 'none';
+            return;
+        }
+
+        titleEl.innerHTML = title;
+        // Use textContent or HTML. We escaped it so innerHTML is safe and allows &quot; etc to render.
+        contentEl.innerHTML = content;
+        popover.dataset.triggerId = title + content.substring(0,20);
+        popover.style.display = 'flex';
+
+        // Positioning logic
+        const rect = element.getBoundingClientRect();
+        const popRect = popover.getBoundingClientRect();
+        
+        let top = rect.bottom + 8;
+        let left = rect.left; // in RTL left might be small if element is on the right
+        
+        if (left + popRect.width > window.innerWidth) {
+            left = window.innerWidth - popRect.width - 16;
+        }
+        if (top + popRect.height > window.innerHeight) {
+            top = rect.top - popRect.height - 8;
+            if (top < 0) {
+                top = 16;
+            }
+        }
+        
+        popover.style.top = top + 'px';
+        popover.style.left = Math.max(16, left) + 'px';
+    }
+
+    // ============================================================
     // (NEW) Helper: Show Dashboard Alert (Persistent)
     // ============================================================
     showDashboardAlert(title, message, type = 'error') {
@@ -175,13 +320,8 @@ class AdminDashboard {
         try {
             const authHeaders = this.getAuthHeaders();
 
-            // Get selected data source
-            const dataSourceSelect = document.getElementById('data-source-select');
-            const dataSource = dataSourceSelect ? dataSourceSelect.value : 'supabase'; // DEFAULT TO SUPABASE
-
-            // Append dataSource to URL
+            // Append date filters to fetch only the needed data from the server
             const url = new URL(this.API_URL);
-            url.searchParams.append('dataSource', dataSource);
 
             // Append date filters to fetch only the needed data from the server
             const dateFilter = document.getElementById('date-filter')?.value || 'month'; // Default to last 30 days
@@ -193,7 +333,7 @@ class AdminDashboard {
                 if (endDate) url.searchParams.append('endDate', endDate);
             }
 
-            const response = await fetch(url.toString(), {
+            const response = await this.apiFetch(url.toString(), {
                 method: 'GET',
                 headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders)
             });
@@ -206,7 +346,7 @@ class AdminDashboard {
                 if (alertBox) alertBox.classList.add('hidden');
 
                 // [NEW] Check for empty data
-                if ((!result.data || result.data.length === 0) && dataSource === 'supabase') {
+                if (!result.data || result.data.length === 0) {
                     this.showDashboardAlert(
                         'تنبيه: لا توجد بيانات',
                         'لم يتم العثور على أي سجلات في قاعدة بيانات Supabase. يرجى التأكد من وجود بيانات في الجداول أو التحقق من الاتصال.',
@@ -352,7 +492,7 @@ class AdminDashboard {
     async debugConnection() {
         try {
             const authHeaders = this.getAuthHeaders();
-            const response = await fetch(this.API_URL + '?dataSource=supabase', {
+            const response = await this.apiFetch(this.API_URL, {
                 headers: authHeaders
             });
             const text = await response.text();
@@ -402,12 +542,16 @@ class AdminDashboard {
         const currentRole = localStorage.getItem('user_role');
         const currentPerms = localStorage.getItem('user_permissions');
 
+        // [FIX] تحديث البريد الإلكتروني دائماً، ليس فقط عند تغيير الدور
+        if (serverUser.email) {
+            localStorage.setItem('user_email', serverUser.email);
+        }
+
         // 2. التحقق من تغير الدور (Role)
         // مثلاً: تم تحويله من Editor إلى Super Admin أو العكس
         if (serverUser.role !== currentRole) {
             console.log(`Role changed from ${currentRole} to ${serverUser.role}. Updating UI...`);
-            localStorage.setItem('user_role', serverUser.role);            // تحديث زر الإعدادات فوراً
-            localStorage.setItem('user_email', serverUser.email);          // (NEW) تخزين البريد للترحيب
+            localStorage.setItem('user_role', serverUser.role);
             this.updateSettingsButtonVisibility(serverUser.role);
             this.updateutmbuilderButtonVisibility(serverUser.role);
             this.updatemanagespendButtonVisibility(serverUser.role);
@@ -423,11 +567,17 @@ class AdminDashboard {
             this.applyPermissionsUI();
         }
 
-        // 4. تحديث الأسماء (Names) - NEW
+        // 4. تحديث الأسماء (Names)
         if (serverUser.first_name !== undefined) {
-            localStorage.setItem('user_first_name', serverUser.first_name);
-            localStorage.setItem('user_last_name', serverUser.last_name || '');
+            if (serverUser.first_name) {
+                localStorage.setItem('user_first_name', serverUser.first_name);
+                localStorage.setItem('user_last_name', serverUser.last_name || '');
+            } else if (serverUser.role === 'super_admin') {
+                // Fallback: يُستدعى فقط للمدير لأن get_users محظور على الموظفين
+                this.fixMissingName(serverUser.email);
+            }
         }
+
 
         // 5. تحديث رسالة الترحيب
         this.updateWelcomeMessage(serverUser.email);
@@ -440,9 +590,14 @@ class AdminDashboard {
         const container = document.getElementById('welcome-message-container');
         if (!container || !email) return;
 
+        let firstName = localStorage.getItem('user_first_name');
+        let lastName = localStorage.getItem('user_last_name');
+        
+        if (firstName === 'undefined' || firstName === 'null') firstName = '';
+        if (lastName === 'undefined' || lastName === 'null') lastName = '';
+
+        // [FIX #8] إعلان name صريح لتجنب ReferenceError
         let name = '';
-        const firstName = localStorage.getItem('user_first_name');
-        const lastName = localStorage.getItem('user_last_name');
 
         if (email === 'Emergency Admin') {
             name = 'Emergency Admin';
@@ -453,6 +608,7 @@ class AdminDashboard {
             name = email.split('@')[0];
             name = name.charAt(0).toUpperCase() + name.slice(1);
         }
+
 
         // 2. تحديد التحية حسب الوقت
         const hour = new Date().getHours();
@@ -477,20 +633,54 @@ class AdminDashboard {
         }
 
         // 3. تحديث النصوص
-        document.getElementById('welcome-title').innerHTML = `${greeting}، <span class="text-brand-blue">${this.escapeHtml(name)}</span>`;
+        document.getElementById('welcome-title').innerHTML = `${greeting}، <span class="text-slate-100 font-bold tracking-wide">${this.escapeHtml(name)}</span>`;
         document.getElementById('welcome-icon-wrapper').innerHTML = icon;
 
-        // 4. تحديث التاريخ والوقت
-        const now = new Date();
-        const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        const timeOptions = { hour: '2-digit', minute: '2-digit' };
+        // 4. تحديث التاريخ والوقت بشكل حي (Live Clock)
+        if (this.clockInterval) {
+            clearInterval(this.clockInterval);
+        }
+        
+        const updateClock = () => {
+            const now = new Date();
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
 
-        // استخدام 'ar-MA' للتنسيق المغربي
-        document.getElementById('welcome-date').textContent = now.toLocaleDateString('ar-MA', dateOptions);
-        document.getElementById('welcome-time').textContent = now.toLocaleTimeString('en-US', timeOptions);
+            const dateElement = document.getElementById('welcome-date');
+            const timeElement = document.getElementById('welcome-time');
+            
+            if (dateElement) dateElement.textContent = now.toLocaleDateString('ar-MA', dateOptions);
+            if (timeElement) timeElement.textContent = now.toLocaleTimeString('en-US', timeOptions);
+        };
+        
+        // تحديث أولي فوراً
+        updateClock();
+        // تحديث كل ثانية
+        this.clockInterval = setInterval(updateClock, 1000);
 
         // 5. إظهار الحاوية
         container.classList.remove('hidden');
+    }
+
+    // Workaround: Vercel might return empty first_name in get_all_data, but get_users works.
+    async fixMissingName(email) {
+        if (!email) return;
+        try {
+            const res = await this.apiFetch(`${this.API_URL}?action=get_users`, {
+                headers: this.getAuthHeaders()
+            });
+            if (res.ok) {
+                const { data } = await res.json();
+                const me = data.find(u => u.email === email);
+                if (me && (me.first_name || me.last_name)) {
+                    localStorage.setItem('user_first_name', me.first_name);
+                    localStorage.setItem('user_last_name', me.last_name);
+                    this.updateWelcomeMessage(email);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fix missing name:', e);
+        }
     }
 
     // دالة مساعدة لإظهار/إخفاء زر الإعدادات ديناميكياً
@@ -2131,6 +2321,57 @@ class AdminDashboard {
             return;
         }
 
+        const renderPopoverTrigger = ({ label, icon, value, variant }) => {
+            if (!value) return '';
+            const rawText = value.trim();
+            if (!rawText) return '';
+            
+            const titleHtml = `${icon ? icon + ' ' : ''}${label}`;
+            // Use this.escapeHtml to prevent breaking HTML attributes
+            const safeContent = this.escapeHtml(rawText);
+            
+            if (variant === 'address') {
+                if (rawText.length <= 25) {
+                    return `<div class="whitespace-nowrap text-slate-400 overflow-hidden text-ellipsis">${this.escapeHtml(rawText)}</div>`;
+                }
+                return `
+                    <div class="whitespace-nowrap text-slate-400 overflow-hidden text-ellipsis cursor-pointer hover:text-slate-200 transition-colors flex items-center gap-1 group" 
+                         data-popover-title="${this.escapeHtml(titleHtml)}"
+                         data-popover-content="${safeContent}"
+                         onclick="dashboard.showPopover(event, this)">
+                        ${this.escapeHtml(rawText.substring(0, 25))}... 
+                        <span class="opacity-50 group-hover:opacity-100 text-[10px]">▾</span>
+                    </div>
+                `;
+            } 
+            
+            if (variant === 'note') {
+                return `
+                    <button type="button" 
+                        class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold transition-colors bg-blue-900/20 text-blue-400 hover:bg-blue-900/40 border border-blue-900/30 outline-none"
+                        data-popover-title="${this.escapeHtml(titleHtml)}"
+                        data-popover-content="${safeContent}"
+                        onclick="dashboard.showPopover(event, this)">
+                        <span class="text-xs">💬</span> Note
+                    </button>
+                `;
+            }
+
+            if (variant === 'delivery') {
+                return `
+                    <button type="button" 
+                        class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold transition-colors bg-slate-800/40 text-slate-400 hover:bg-slate-700/60 border border-slate-700/40 outline-none"
+                        data-popover-title="${this.escapeHtml(titleHtml)}"
+                        data-popover-content="${safeContent}"
+                        onclick="dashboard.showPopover(event, this)">
+                        <span class="text-xs">🚚</span> Delivery
+                    </button>
+                `;
+            }
+            
+            return '';
+        };
+
         tbody.innerHTML = paged.map((item, idx) => {
             const globalIdx = start + idx;
             const statusInfo = this.getStatusInfo(item.status);
@@ -2148,7 +2389,6 @@ class AdminDashboard {
                 paymentCodeDisplay = `<div class="text-xs text-slate-400 font-mono mt-0.5">Card: **** ${this.sanitizeHTML(item.last4 || '-')}</div>`;
             } else if (pm === 'cash') {
                 paymentMethodText = '<span class="text-green-400 flex items-center justify-end gap-1">نقد (Cash) <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg></span>';
-                // نستخدم cashplusCode الذي خزنا فيه الكود اليدوي
                 paymentCodeDisplay = `<div class="text-xs text-slate-400 font-mono mt-0.5 bg-slate-800 border border-slate-700 rounded px-1 inline-block">${this.sanitizeHTML(item.cashplusCode || '-')}</div>`;
             } else if (pm.includes('bank') || pm === 'virement') {
                 paymentMethodText = '<span class="text-blue-600 flex items-center justify-end gap-1">تحويل بنكي <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"/></svg></span>';
@@ -2182,53 +2422,145 @@ class AdminDashboard {
             // إذا لم تكن هناك أي بيانات تتبع، نعرض شرطة
             if (!item.utm_campaign && !item.utm_source) utmBadges = '<span class="text-slate-300">-</span>';
 
+            // -- Popover UI Logic --
+            const addressHtml = renderPopoverTrigger({
+                label: 'Adresse',
+                icon: '📍',
+                value: item.clientAddress,
+                variant: 'address'
+            }) || '<span class="text-slate-500 italic">-</span>';
+
+            const noteHtml = renderPopoverTrigger({
+                label: 'Note',
+                icon: '💬',
+                value: item.note,
+                variant: 'note'
+            });
+
+            const deliveryNoteHtml = renderPopoverTrigger({
+                label: 'Delivery Note',
+                icon: '🚚',
+                value: item.deliveryNote || item.delivery_note,
+                variant: 'delivery'
+            });
+
+            // --- Lifecycle Events Logic ---
+            let lifecycleHtml = '';
+            if (item.lifecycle_events && item.lifecycle_events.length > 0) {
+                const failedEvents = item.lifecycle_events.filter(e => e.status === 'failed');
+                const processingEvents = item.lifecycle_events.filter(e => e.status === 'processing');
+                if (failedEvents.length > 0) {
+                    const latestFail = failedEvents[0];
+                    const safeErr = this.escapeHtml(latestFail.error_details || 'Unknown Error');
+                    const popoverHtml = `
+                        <div class="text-xs">
+                            <p><strong>Type:</strong> ${latestFail.event_type}</p>
+                            <p class="text-red-400 mt-1"><strong>Error:</strong> ${safeErr}</p>
+                            <p class="mt-1"><strong>Attempts:</strong> ${latestFail.attempt_count || 0}</p>
+                            <button onclick="dashboard.retryLifecycle('${latestFail.event_type}', '${item.id}')" class="mt-3 w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-2 rounded border border-slate-500 transition-colors flex items-center justify-center gap-1">
+                                🔄 Retry Message
+                            </button>
+                        </div>
+                    `.replace(/"/g, '&quot;');
+
+                    lifecycleHtml = `
+                        <div class="mt-1">
+                            <button type="button" class="text-red-400 bg-red-900/20 px-1.5 py-0.5 rounded border border-red-500/30 text-[9px] hover:bg-red-900/40 outline-none flex items-center gap-1"
+                                data-popover-title="⚠️ WhatsApp Failed"
+                                data-popover-content="${popoverHtml}"
+                                onclick="dashboard.showPopover(event, this)">
+                                ⚠️ WA Error
+                            </button>
+                        </div>
+                    `;
+                } else if (processingEvents.length > 0) {
+                    lifecycleHtml = `<div class="mt-1"><span class="text-amber-400 bg-amber-900/20 px-1.5 py-0.5 rounded border border-amber-500/30 text-[9px]" title="Processing API request...">⏳ WA Processing</span></div>`;
+                }
+            }
+
             return `
         <tr class="hover:bg-slate-800 border border-slate-700/50 border-b border-slate-700/50 transition-colors">
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+            <!-- 1. Date -->
+            <td class="px-2.5 py-2.5 whitespace-nowrap text-[11px] text-slate-300 align-middle">
                 ${this.formatDate(item.timestamp)}
-                <div class="mt-1">${item.isExternal ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-900/40 text-purple-400 border border-purple-500/30">🌍 خارجي</span>' : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30">📦 داخلي</span>'}</div>
+                <div class="mt-0.5">${item.isExternal ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-900/40 text-purple-400 border border-purple-500/30">🌍 خارجي</span>' : '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30">📦 داخلي</span>'}</div>
             </td>
-            <td class="px-6 py-4">
-                <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.class}">${statusInfo.text}</span>
-                ${(item.status === 'cancelled' || item.status === 'canceled') && item.deliveryNote ? `<div class="mt-2 text-[10px] text-red-400 max-w-[120px] whitespace-normal bg-red-900/10 p-1.5 rounded border border-red-900/30">السبب: ${this.sanitizeHTML(item.deliveryNote)}</div>` : ''}
+            
+            <!-- 2. Statut -->
+            <td class="px-2.5 py-2.5 align-middle">
+                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full ${statusInfo.class} whitespace-nowrap">${statusInfo.text}</span>
+                ${lifecycleHtml}
+                ${(item.status === 'cancelled' || item.status === 'canceled') && (item.deliveryNote || item.delivery_note) ? `<div class="mt-1 text-[9px] text-red-400 max-w-[120px] whitespace-normal bg-red-900/10 p-1 rounded border border-red-900/30 leading-tight">السبب: ${this.sanitizeHTML(item.deliveryNote || item.delivery_note)}</div>` : ''}
             </td>
-            <td class="px-6 py-4 text-xs text-slate-400 font-mono">
-                <div class="font-bold text-white">${this.sanitizeHTML(item.orderId)}</div>
-                ${item.transactionId ? `<div class="text-slate-500 mt-0.5 text-[10px]">${this.sanitizeHTML(item.transactionId)}</div>` : ''}
+            
+            <!-- 3. Identifiants -->
+            <td class="px-2.5 py-2.5 text-xs text-slate-400 font-mono align-middle min-w-[100px]">
+                <div class="font-bold text-white text-[11px]">${this.sanitizeHTML(item.orderId)}</div>
+                ${item.transactionId ? `<div class="text-slate-500 mt-0.5 text-[9px]">${this.sanitizeHTML(item.transactionId)}</div>` : ''}
             </td>
-            <td class="px-6 py-4 text-sm">
-                <div class="font-bold text-white text-right">${this.sanitizeHTML(item.customerName)}</div>
-                <div class="text-slate-400 text-xs text-right">${this.sanitizeHTML(item.customerEmail)}</div>
+            
+            <!-- 4. Client -->
+            <td class="px-2.5 py-2.5 text-xs align-middle min-w-[120px]">
+                <div class="font-bold text-white text-[11px] text-right truncate max-w-[140px]">${this.sanitizeHTML(item.customerName)}</div>
+                ${item.customerEmail && item.customerEmail !== '-' ? `<div class="text-slate-400 text-[10px] text-right truncate max-w-[140px]">${this.sanitizeHTML(item.customerEmail)}</div>` : ''}
             </td>
-            <td class="px-6 py-4 text-sm text-slate-300 font-mono text-right" dir="ltr">${this.sanitizeHTML(item.customerPhone)}</td>
-            <td class="px-6 py-4 text-sm text-right">
-                <div class="flex flex-col gap-1 items-end">
-                    <span class="text-white font-bold">🧴 ${this.sanitizeHTML(item.productTitle || item.normalizedCourse || 'Dermossence')}</span>
-                    ${item.productSku ? `<span class="text-[10px] font-mono px-1.5 py-0.5 bg-slate-700 rounded text-slate-300">SKU: ${this.sanitizeHTML(item.productSku)}</span>` : ''}
-                    ${item.language ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-600 text-slate-200 uppercase">${this.sanitizeHTML(item.language)}</span>` : ''}
+            
+            <!-- 5. Téléphone -->
+            <td class="px-2.5 py-2.5 text-[11px] text-slate-300 font-mono text-right align-middle whitespace-nowrap" dir="ltr">${this.sanitizeHTML(item.customerPhone)}</td>
+            
+            <!-- 6. المنتج & SKU -->
+            <td class="px-2.5 py-2.5 text-xs text-right align-middle min-w-[140px]">
+                <div class="flex flex-col gap-0.5 items-end">
+                    <span class="text-white font-bold text-[11px] truncate max-w-[150px]" title="${this.sanitizeHTML(item.productTitle || item.normalizedCourse || 'Dermossence')}">${this.sanitizeHTML(item.productTitle || item.normalizedCourse || 'Dermossence')}</span>
+                    <div class="flex gap-1 flex-wrap justify-end">
+                        ${item.productSku ? `<span class="text-[9px] font-mono px-1 py-0.5 bg-slate-700 rounded text-slate-300">SKU: ${this.sanitizeHTML(item.productSku)}</span>` : ''}
+                        ${item.language ? `<span class="text-[9px] px-1 py-0.5 rounded bg-slate-600 text-slate-200 uppercase">${this.sanitizeHTML(item.language)}</span>` : ''}
+                    </div>
                 </div>
             </td>
-            <td class="px-6 py-4 text-sm text-center">
-                <span class="font-bold text-white text-lg">×${this.sanitizeHTML(String(item.quantity || 1))}</span>
+            
+            <!-- 7. الكمية (Quantité) -->
+            <td class="px-2.5 py-2.5 text-xs text-center align-middle">
+                <span class="font-bold text-white bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded text-[11px]">×${this.sanitizeHTML(String(item.quantity || 1))}</span>
             </td>
-            <td class="px-6 py-4 text-sm text-slate-400 max-w-[160px] truncate" title="${this.sanitizeHTML(item.clientAddress || '')}">${this.sanitizeHTML(item.clientAddress || '-')}</td>
-            <td class="px-6 py-4 text-xs text-right" dir="ltr">${utmBadges}</td>
-            <td class="px-6 py-4 text-sm font-bold text-slate-400 text-left sensitive-amount" dir="ltr">MAD ${this.sanitizeHTML(String(item.finalAmount))}</td>
-            <td class="px-6 py-4 text-sm text-right">
-                <div class="font-bold text-emerald-400">${paymentMethodText}</div>
+            
+            <!-- 8. العنوان (Adresse) -->
+            <td class="px-2.5 py-2.5 text-[11px] text-slate-400 max-w-[140px] align-middle">${addressHtml}</td>
+            
+            <!-- 9. Campagne -->
+            <td class="px-2.5 py-2.5 text-[10px] text-right align-middle max-w-[120px]" dir="ltr">${utmBadges}</td>
+            
+            <!-- 10. Montant -->
+            <td class="px-2.5 py-2.5 text-xs font-bold text-slate-300 text-left align-middle whitespace-nowrap" dir="ltr">MAD ${this.sanitizeHTML(String(item.finalAmount))}</td>
+            
+            <!-- 11. Mode de paiement -->
+            <td class="px-2.5 py-2.5 text-xs text-right align-middle min-w-[100px]">
+                <div class="font-bold text-emerald-400 text-[10px]">${paymentMethodText}</div>
                 ${paymentCodeDisplay}
-                ${item.status !== 'cancelled' && item.status !== 'canceled' && item.deliveryNote ? `<div class="text-xs text-slate-400 mt-0.5">${this.sanitizeHTML(item.deliveryNote)}</div>` : ''}
             </td>
-            <td class="px-6 py-4 text-xs text-slate-400 text-right italic dir-ltr">
-    ${this.sanitizeHTML(item.lastUpdatedBy || '-')}
-</td>
-            <td class="px-6 py-4 text-center">
-                <div class="flex justify-center gap-3">
-                    <button onclick="dashboard.editRow(${globalIdx})" class="text-blue-500 hover:text-blue-400" title="تعديل">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+            
+            <!-- 12. Notes -->
+            <td class="px-2.5 py-2.5 text-xs text-right align-middle w-auto min-w-[80px]">
+                ${(!item.note && !(item.deliveryNote || item.delivery_note)) ? '<span class="text-slate-500 italic">-</span>' : 
+                 `<div class="flex flex-wrap items-center justify-end gap-1">
+                     ${noteHtml}
+                     ${deliveryNoteHtml}
+                  </div>`}
+            </td>
+            
+            <!-- 13. Dernière mise à jour -->
+            <td class="px-2.5 py-2.5 text-[10px] text-slate-400 text-right italic dir-ltr align-middle min-w-[80px] truncate max-w-[100px]">
+                ${this.sanitizeHTML(item.lastUpdatedBy || '-')}
+            </td>
+            
+            <!-- 14. Actions -->
+            <td class="px-2.5 py-2.5 text-center align-middle w-16">
+                <div class="flex justify-center gap-1.5">
+                    <button onclick="dashboard.editRow(${globalIdx})" class="text-blue-400 hover:text-blue-300 transition-colors bg-blue-900/20 p-1 rounded outline-none" title="تعديل">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                     </button>
-                    <button onclick="dashboard.showConfirmDelete(${globalIdx})" class="text-red-500 hover:text-red-700" title="حذف">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <button onclick="dashboard.showConfirmDelete(${globalIdx})" class="text-red-400 hover:text-red-300 transition-colors bg-red-900/20 p-1 rounded outline-none" title="حذف">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 </div>
             </td>
@@ -2242,6 +2574,31 @@ class AdminDashboard {
     // ============================================================
     // (NEW) Invitation System
     // ============================================================
+    async retryLifecycle(eventType, orderId) {
+        let popover = document.getElementById('global-popover');
+        if (popover) popover.style.display = 'none';
+        
+        this.showNotification('Initiating WhatsApp retry...', 'info');
+        try {
+            const res = await this.apiFetch(`${this.API_URL}?action=lifecycle-retry`, {
+                method: 'POST',
+                headers: this.getAuthHeaders(),
+                body: JSON.stringify({ event_type: eventType, order_id: orderId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.showNotification('Retry dispatched successfully.', 'success');
+                // Refresh data to show processing/sent state
+                this.fetchAllData();
+            } else {
+                this.showNotification(data.error || 'Retry failed', 'error');
+            }
+        } catch (e) {
+            console.error('Retry error:', e);
+            this.showNotification('Network error during retry', 'error');
+        }
+    }
+
     // Dermossence: Order follow-up note
     showInviteModal(idx) {
         const row = this.filteredData[idx];
@@ -2252,11 +2609,11 @@ class AdminDashboard {
                 <div class="text-xs text-slate-400">العميل</div>
                 <div class="font-bold text-white">${this.escapeHtml(row.customerName)}</div>
                 <div class="text-xs text-slate-400 font-mono mt-1">${this.escapeHtml(row.customerPhone)}</div>
-                <div class="text-xs text-slate-400 mt-1">🧴 ${this.escapeHtml(row.normalizedCourse || row.productSku || row.productTitle || 'Unknown')} — ×${row.quantity || 1}</div>
+                <div class="text-xs text-slate-400 mt-1"> ${this.escapeHtml(row.normalizedCourse || row.productSku || row.productTitle || 'Unknown')} — ×${row.quantity || 1}</div>
             </div>
             <div>
                 <label class="text-xs font-bold text-slate-400 block mb-1">ملاحظة المتابعة / سبب الإلغاء</label>
-                <textarea id="followup-note" rows="4" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white focus:ring-1 focus:ring-blue-500" placeholder="اكتب ملاحظة المتابعة أو سبب الإلغاء هنا...">${this.escapeHtml(row.deliveryNote || '')}</textarea>
+                <textarea id="followup-note" rows="4" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white focus:ring-1 focus:ring-blue-500" placeholder="اكتب ملاحظة المتابعة أو سبب الإلغاء هنا...">${this.escapeHtml(row.deliveryNote || row.delivery_note || '')}</textarea>
             </div>
             <div>
                 <label class="text-xs font-bold text-slate-400 block mb-1">تحديث حالة الطلب</label>
@@ -2287,7 +2644,7 @@ class AdminDashboard {
             }
 
             try {
-                const res = await fetch(this.API_URL, {
+                const res = await this.apiFetch(this.API_URL, {
                     method: 'PUT',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -2855,7 +3212,7 @@ class AdminDashboard {
             const last_name = m.querySelector('#edit-last-name').value;
 
             try {
-                const res = await fetch(`${this.API_URL}?action=update_user`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=update_user`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ userId: user.id, role, is_frozen, can_edit, can_view_stats, can_view_internal, can_view_external, first_name, last_name })
@@ -2888,7 +3245,7 @@ class AdminDashboard {
             // استخدام نافذة التأكيد الجديدة
             this.showCustomConfirm('هل أنت متأكد من تغيير كلمة المرور لهذا الموظف؟', async () => {
                 try {
-                    const res = await fetch(`${this.API_URL}?action=change_password`, {
+                    const res = await this.apiFetch(`${this.API_URL}?action=change_password`, {
                         method: 'POST',
                         headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                         body: JSON.stringify({ newPassword: newPass, userId: user.id })
@@ -2915,16 +3272,24 @@ class AdminDashboard {
 
         m.querySelector('#del-confirm').onclick = async () => {
             const btn = m.querySelector('#del-confirm');
+            
+            // STRICT VALIDATION
+            if (item.id === undefined || item.id === null || item.id === "" || item.id === "N/A" || isNaN(Number(item.id))) {
+                this.showNotification('خطأ: معرف الطلب غير صالح للحذف.', 'error');
+                m.remove();
+                return;
+            }
+
             btn.textContent = 'جاري الحذف...';
             btn.disabled = true;
-            await this.doDelete(item.orderId || item.transactionId);
+            await this.doDelete(item.id);
             m.remove();
         };
     }
 
     async doDelete(id) {
         try {
-            const res = await fetch(this.API_URL, {
+            const res = await this.apiFetch(this.API_URL, {
                 method: 'DELETE',
                 headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                 body: JSON.stringify({ id })
@@ -2984,9 +3349,13 @@ class AdminDashboard {
                     <label class="text-xs font-bold text-slate-400">العنوان</label>
                     <input class="border p-2 bg-slate-900 w-full rounded text-sm" name="address" value="${s(item.clientAddress || item.address)}">
                 </div>
+                <div class="col-span-2 md:col-span-1">
+                    <label class="block text-slate-400 text-xs mb-1">ملاحظة التوصيل (Delivery Note)</label>
+                    <input class="border p-2 bg-slate-900 w-full rounded text-sm" name="deliveryNote" value="${s(item.deliveryNote || item.delivery_note)}">
+                </div>
                 <div class="col-span-2">
-                    <label class="text-xs font-bold text-slate-400">ملاحظات التسليم</label>
-                    <input class="border p-2 bg-slate-900 w-full rounded text-sm" name="deliveryNote" value="${s(item.deliveryNote)}">
+                    <label class="block text-slate-400 text-xs mb-1">ملاحظة العميل/البائع (Business Note)</label>
+                    <textarea class="border p-2 bg-slate-900 w-full rounded text-sm" name="note" rows="3" placeholder="ملاحظات العميل...">${s(item.note)}</textarea>
                 </div>
             </div>
 
@@ -3040,7 +3409,7 @@ class AdminDashboard {
             };
 
             try {
-                const res = await fetch(this.API_URL, {
+                const res = await this.apiFetch(this.API_URL, {
                     method: 'PUT',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -3133,8 +3502,12 @@ class AdminDashboard {
                         <input class="bg-slate-900 border border-slate-700 text-white p-2 w-full rounded" name="address" placeholder="المدينة، الحي، الشارع...">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">ملاحظات التسليم</label>
+                        <label class="block text-xs text-slate-400 mb-1">Delivery Note</label>
                         <input class="bg-slate-900 border border-slate-700 text-white p-2 w-full rounded" name="deliveryNote" placeholder="أي تعليمات للتوصيل...">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs text-slate-400 mb-1">Business Note (Client/Seller)</label>
+                        <textarea class="bg-slate-900 border border-slate-700 text-white p-2 w-full rounded" name="note" rows="2" placeholder="ملاحظات الاستشارة..."></textarea>
                     </div>
                     <label class="flex items-center gap-2 mt-2 text-sm cursor-pointer hover:bg-slate-800 p-2 rounded border border-slate-700/50">
                         <input type="checkbox" name="is_external" class="rounded text-purple-400 focus:ring-purple-500">
@@ -3326,6 +3699,7 @@ class AdminDashboard {
                 quantity: fd.get('quantity') || '1',
                 address: fd.get('address') || '',
                 deliveryNote: fd.get('deliveryNote') || '',
+                note: fd.get('note') || '',
                 language: fd.get('language') || 'fr',
                 is_external: fd.get('is_external') === 'on' ? 'true' : 'false',
 
@@ -3345,7 +3719,7 @@ class AdminDashboard {
 
             // الإرسال للسيرفر
             try {
-                const response = await fetch(this.API_URL, {
+                const response = await this.apiFetch(this.API_URL, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -3405,7 +3779,145 @@ class AdminDashboard {
     // 13. Settings & User Management (NEW)
     // ============================================================
 
+    openProfileModal() {
+        document.getElementById('modal-container').innerHTML = '';
+
+        const m = document.createElement('div');
+        m.id = 'profile-modal-wrapper';
+        m.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50';
+
+        let firstName = localStorage.getItem('user_first_name');
+        let lastName = localStorage.getItem('user_last_name');
+        if (firstName === 'undefined' || firstName === 'null' || !firstName) firstName = '';
+        if (lastName === 'undefined' || lastName === 'null' || !lastName) lastName = '';
+        const email = localStorage.getItem('user_email') || '';
+
+        m.innerHTML = `
+        <div class="bg-slate-900 text-white rounded-xl shadow-2xl max-w-md w-full transform transition-all flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-slate-700/50 flex justify-between items-center bg-slate-900/50 rounded-t-2xl shrink-0">
+                <h3 class="font-bold text-lg text-white">إعدادات الحساب</h3>
+                <button id="close-profile-btn" class="text-slate-400 hover:text-red-500">✕</button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4">
+                <div class="bg-slate-800 p-4 rounded border border-slate-700/50 flex flex-col gap-3">
+                    <h4 class="font-bold text-white text-sm mb-1 border-b border-slate-700 pb-2">بيانات الموظف</h4>
+                    <div class="flex gap-2">
+                        <div class="flex-1">
+                            <label class="text-xs text-slate-400 block mb-1">الاسم الأول</label>
+                            <input id="profile-first-name" type="text" value="${firstName}" class="w-full p-2 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                        </div>
+                        <div class="flex-1">
+                            <label class="text-xs text-slate-400 block mb-1">الاسم الأخير</label>
+                            <input id="profile-last-name" type="text" value="${lastName}" class="w-full p-2 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">البريد الإلكتروني</label>
+                        <input type="email" value="${email}" readonly dir="ltr" class="w-full p-2 bg-slate-900 border border-slate-700 rounded text-sm text-slate-300 opacity-70 cursor-not-allowed text-left">
+                    </div>
+                    <button id="btn-profile-save-info" class="w-full bg-brand-blue/20 text-brand-blue border border-brand-blue/50 py-2 rounded text-sm font-bold hover:bg-brand-blue hover:text-white transition mt-2">حفظ البيانات الشخصية</button>
+                </div>
+
+                <div class="bg-slate-800 p-4 rounded border border-slate-700/50 flex flex-col gap-3">
+                    <h4 class="font-bold text-white text-sm border-b border-slate-700 pb-2">تغيير كلمة المرور</h4>
+                    <div class="bg-yellow-900/20 border-l-4 border-brand-amber p-3 mb-2 rounded-r">
+                        <p class="text-xs text-amber-400">تنبيه: سيتم تسجيل خروجك بعد التغيير.</p>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">كلمة المرور الجديدة</label>
+                        <input id="profile-new-pass" type="password" placeholder="******" class="w-full p-2 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-brand-blue focus:ring-1 focus:ring-brand-blue">
+                    </div>
+                    <button id="btn-profile-save-pass" class="w-full bg-red-500/20 text-red-400 border border-red-500/50 py-2 rounded text-sm font-bold hover:bg-red-600 hover:text-white transition mt-2">تحديث كلمة المرور</button>
+                </div>
+            </div>
+        </div>`;
+
+        document.getElementById('modal-container').appendChild(m);
+
+        m.querySelector('#close-profile-btn').onclick = () => m.remove();
+
+        const btnSavePass = m.querySelector('#btn-profile-save-pass');
+        const btnSaveInfo = m.querySelector('#btn-profile-save-info');
+        const fNameInput = m.querySelector('#profile-first-name');
+        const lNameInput = m.querySelector('#profile-last-name');
+
+        // تحديث البيانات الشخصية
+        btnSaveInfo.onclick = async () => {
+            const fName = fNameInput.value.trim();
+            const lName = lNameInput.value.trim();
+            const emailValue = email; // email comes from localStorage
+
+            btnSaveInfo.textContent = 'جاري الحفظ...';
+            btnSaveInfo.disabled = true;
+
+            try {
+                const res = await this.apiFetch(`${this.API_URL}?action=update_profile`, {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
+                    body: JSON.stringify({ first_name: fName, last_name: lName })
+                });
+
+                const result = await res.json();
+                if (res.ok) {
+                    this.showNotification('تم تحديث البيانات الشخصية بنجاح ✅', 'success');
+                    localStorage.setItem('user_first_name', fName);
+                    localStorage.setItem('user_last_name', lName);
+                    this.updateWelcomeMessage(emailValue);
+                } else {
+                    this.showNotification(result.error || 'حدث خطأ أثناء التحديث', 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                this.showNotification('خطأ في الاتصال بالخادم', 'error');
+            } finally {
+                btnSaveInfo.textContent = 'حفظ البيانات الشخصية';
+                btnSaveInfo.disabled = false;
+            }
+        };
+
+        btnSavePass.onclick = () => {
+            const newPassword = m.querySelector('#profile-new-pass').value;
+            if (!newPassword || newPassword.length < 6) {
+                this.showNotification('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
+                return;
+            }
+
+            this.showCustomConfirm('هل أنت متأكد من تغيير كلمة المرور؟ سيتم تسجيل الخروج.', async () => {
+                try {
+                    btnSavePass.disabled = true;
+                    btnSavePass.textContent = 'جاري التحديث...';
+                    
+                    const res = await this.apiFetch(`${this.API_URL}?action=change_password`, {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
+                        body: JSON.stringify({ newPassword })
+                    });
+
+                    if (res.ok) {
+                        this.showNotification('تم تغيير كلمة المرور بنجاح.', 'success');
+                        this.logout();
+                    } else {
+                        const d = await res.json();
+                        this.showNotification('خطأ: ' + (d.error?.message || d.error), 'error');
+                        btnSavePass.disabled = false;
+                        btnSavePass.textContent = 'تحديث كلمة المرور';
+                    }
+                } catch (e) { 
+                    this.showNotification(e.message, 'error'); 
+                    btnSavePass.disabled = false;
+                    btnSavePass.textContent = 'تحديث كلمة المرور';
+                }
+            });
+        };
+    }
+
     openSettingsModal() {
+        const currentUserRole = localStorage.getItem('user_role');
+        if (currentUserRole !== 'super_admin') {
+            this.openProfileModal();
+            return;
+        }
+
         // تنظيف الحاوية تماماً عند فتح الإعدادات الرئيسية لضمان بداية نظيفة
         document.getElementById('modal-container').innerHTML = '';
 
@@ -3525,47 +4037,7 @@ class AdminDashboard {
             };
         }
 
-        // Generic Sync Function
-        const handleSync = async (btnId, target, label) => {
-            const btn = m.querySelector(`#${btnId}`);
-            if (!btn) return;
 
-            btn.onclick = async () => {
-                const statusArea = m.querySelector('#sync-status-area');
-                statusArea.classList.remove('hidden');
-                statusArea.textContent = `جاري بدء مزامنة ${label}...`;
-                btn.disabled = true;
-                btn.classList.add('opacity-50', 'cursor-not-allowed');
-
-                try {
-                    const res = await fetch(`https://luxalry-api.vercel.app/api/sync?target=${target}`, {
-                        method: 'POST',
-                        headers: this.getAuthHeaders()
-                    });
-                    const data = await res.json();
-
-                    if (res.ok) {
-                        statusArea.className = 'p-3 rounded text-xs font-mono bg-emerald-900/20 border border-emerald-800 text-emerald-400 whitespace-pre-wrap';
-                        statusArea.textContent = `✅ تمت مزامنة ${label} بنجاح!\n\n${JSON.stringify(data, null, 2)}`;
-                        this.showNotification(`تمت مزامنة ${label} بنجاح`, 'success');
-                    } else {
-                        throw new Error(data.message || 'فشل المزامنة');
-                    }
-                } catch (error) {
-                    statusArea.className = 'p-3 rounded text-xs font-mono bg-red-900/20 border border-red-800 text-red-400 whitespace-pre-wrap';
-                    statusArea.textContent = `❌ خطأ: ${error.message}`;
-                    this.showNotification(`فشل مزامنة ${label}`, 'error');
-                } finally {
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                }
-            };
-        };
-
-        // Initialize Sync Buttons
-        handleSync('btn-manual-sync', 'leads', 'العملاء');
-        handleSync('btn-sync-spend', 'marketing_spend', 'المصاريف');
-        handleSync('btn-sync-campaigns', 'campaigns', 'الحملات');
 
         // تحميل القائمة وتفعيل الأزرار
         this.fetchUsersList(m.querySelector('#users-list-body'));
@@ -3595,7 +4067,7 @@ class AdminDashboard {
 
     async fetchUsersList(tbody) {
         try {
-            const res = await fetch(`${this.API_URL}?action=get_users`, {
+            const res = await this.apiFetch(`${this.API_URL}?action=get_users`, {
                 method: 'GET',
                 headers: this.getAuthHeaders()
             });
@@ -3662,7 +4134,7 @@ class AdminDashboard {
         btn.textContent = '...'; btn.disabled = true;
 
         try {
-            const res = await fetch(`${this.API_URL}?action=add_user`, {
+            const res = await this.apiFetch(`${this.API_URL}?action=add_user`, {
                 method: 'POST',
                 headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                 body: JSON.stringify({ email, password, role, can_edit, can_view_stats, can_view_internal, can_view_external, first_name, last_name })
@@ -3689,7 +4161,7 @@ class AdminDashboard {
     async handleDeleteUserAction(userId) {
         this.showCustomConfirm('هل أنت متأكد من حذف هذا الموظف؟ سيتم منعه من الدخول فوراً.', async () => {
             try {
-                const res = await fetch(`${this.API_URL}?action=delete_user`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=delete_user`, {
                     method: 'DELETE',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ userId })
@@ -3715,7 +4187,7 @@ class AdminDashboard {
 
         this.showCustomConfirm('هل أنت متأكد من تغيير كلمة المرور؟ سيتم تسجيل الخروج.', async () => {
             try {
-                const res = await fetch(`${this.API_URL}?action=change_password`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=change_password`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ newPassword })
@@ -3850,7 +4322,7 @@ class AdminDashboard {
     async logout() {
         try {
             // 1. طلب تسجيل الخروج من السيرفر (لحذف الكوكيز إن وجدت)
-            await fetch(`${this.API_URL}?action=logout`, {
+            await this.apiFetch(`${this.API_URL}?action=logout`, {
                 method: 'POST',
                 // لا نحتاج لانتظار الرد، المهم إرسال الطلب
             });
@@ -3915,6 +4387,9 @@ class AdminDashboard {
         if (mobileBackdrop) {
             mobileBackdrop.addEventListener('click', () => toggleSidebar(false));
         }
+
+        // --- (NEW) Initialize WhatsApp UI ---
+        this.initWhatsApp();
         // ---------------------------------
         // ---------------------------------
 
@@ -3937,13 +4412,14 @@ class AdminDashboard {
             const p = document.getElementById('password').value;
 
             try {
-                const response = await fetch(this.API_URL, { // تأكد أن الرابط يدعم /login
+                const response = await this.apiFetch(this.API_URL, { // تأكد أن الرابط يدعم /login
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: u, password: p })
                 });
 
                 const result = await response.json();
+                console.log("Login API Response:", result); // [DEBUG]
 
                 if (response.ok && result.success) {
                     // تخزين التوكن والدور
@@ -3954,6 +4430,7 @@ class AdminDashboard {
                     localStorage.setItem('user_email', u);
                     localStorage.setItem('user_first_name', result.first_name || '');
                     localStorage.setItem('user_last_name', result.last_name || '');
+                    console.log("Saved to localStorage:", { first: result.first_name, last: result.last_name }); // [DEBUG]
                     if (result.type === 'backdoor') {
                         localStorage.setItem('basic_cred', btoa(u + ':' + p));
                     }
@@ -4237,7 +4714,7 @@ class AdminDashboard {
         // استبدال confirm بالنافذة المخصصة
         this.showCustomConfirm('هل أنت متأكد من حذف هذا السجل المالي؟', async () => {
             try {
-                const res = await fetch(`${this.API_URL}?action=delete_spend`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=delete_spend`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ spendId: spendId })
@@ -4311,7 +4788,7 @@ class AdminDashboard {
             };
 
             try {
-                const res = await fetch(`${this.API_URL}?action=update_spend`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=update_spend`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -4663,7 +5140,7 @@ class AdminDashboard {
             btn.textContent = 'جاري الحفظ...'; btn.disabled = true;
 
             try {
-                const res = await fetch(`${this.API_URL}?action=add_campaign`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=add_campaign`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -4715,7 +5192,7 @@ class AdminDashboard {
     async deleteCampaign(name) {
         this.showCustomConfirm(`هل أنت متأكد من حذف الحملة "${name}"؟`, async () => {
             try {
-                const res = await fetch(`${this.API_URL}?action=delete_campaign`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=delete_campaign`, {
                     method: 'DELETE',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify({ name })
@@ -4793,7 +5270,7 @@ class AdminDashboard {
             };
 
             try {
-                const res = await fetch(`${this.API_URL}?action=update_campaign`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=update_campaign`, {
                     method: 'POST', // نستخدم POST لأننا عرفناه كذلك في الباكند للتحديث
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -4904,7 +5381,7 @@ class AdminDashboard {
             const payload = Object.fromEntries(fd.entries());
 
             try {
-                const res = await fetch(`${this.API_URL}?action=add_spend`, {
+                const res = await this.apiFetch(`${this.API_URL}?action=add_spend`, {
                     method: 'POST',
                     headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
                     body: JSON.stringify(payload)
@@ -4976,6 +5453,220 @@ class AdminDashboard {
                         newBtn.classList.add('text-blue-400', 'scale-110');
                     }
                 });
+            }
+        });
+    }
+    
+    // ============================================================
+    // (NEW) WhatsApp Integration
+    // ============================================================
+    initWhatsApp() {
+        const waBtn = document.getElementById('whatsapp-btn');
+        if (waBtn) {
+            waBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.openWhatsAppModal();
+            });
+        }
+    }
+
+    openWhatsAppModal() {
+        let container = document.getElementById('modal-container');
+        if (!container) return;
+        
+        const tmpl = document.getElementById('whatsapp-modal-template');
+        if (!tmpl) return;
+        
+        container.innerHTML = '';
+        container.appendChild(tmpl.content.cloneNode(true));
+        
+        // Ensure close functionality
+        const closeBtn = document.getElementById('close-whatsapp-modal');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                container.innerHTML = '';
+                this.currentWhatsAppConversation = null;
+            });
+        }
+        
+        this.loadWhatsAppConversations();
+    }
+    
+    async loadWhatsAppConversations() {
+        const listDiv = document.getElementById('conversations-list');
+        if (!listDiv) return;
+        
+        listDiv.innerHTML = '<div class="p-8 text-center text-slate-500">جاري التحميل...</div>';
+        
+        try {
+            const authHeaders = this.getAuthHeaders();
+            const res = await this.apiFetch(`${this.API_URL}-whatsapp?action=conversations`, {
+                headers: authHeaders
+            });
+            const data = await res.json();
+            
+            if (data.success && data.conversations) {
+                if (data.conversations.length === 0) {
+                    listDiv.innerHTML = '<div class="p-8 text-center text-slate-500">لا توجد محادثات.</div>';
+                    return;
+                }
+                
+                listDiv.innerHTML = '';
+                data.conversations.forEach(conv => {
+                    const el = document.createElement('div');
+                    el.className = 'p-4 border-b border-slate-800/50 hover:bg-slate-800 cursor-pointer transition-colors';
+                    const name = conv.customer_name || 'عميل غير معروف';
+                    const time = new Date(conv.updated_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                    
+                    el.innerHTML = `
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="font-bold text-slate-200">${this.escapeHtml(name)}</span>
+                            <span class="text-xs text-slate-500">${time}</span>
+                        </div>
+                        <div class="text-sm text-slate-400" dir="ltr">${this.escapeHtml(conv.phone_number)}</div>
+                    `;
+                    el.addEventListener('click', () => {
+                        // Highlight selection
+                        listDiv.querySelectorAll('div').forEach(d => d.classList.remove('bg-slate-800'));
+                        el.classList.add('bg-slate-800');
+                        this.openWhatsAppChat(conv);
+                    });
+                    listDiv.appendChild(el);
+                });
+            } else {
+                listDiv.innerHTML = '<div class="p-4 text-center text-red-400">فشل التحميل.</div>';
+            }
+        } catch (e) {
+            listDiv.innerHTML = '<div class="p-4 text-center text-red-400">خطأ في الاتصال.</div>';
+        }
+    }
+    
+    async openWhatsAppChat(conversation) {
+        this.currentWhatsAppConversation = conversation;
+        
+        document.getElementById('chat-header').classList.remove('hidden');
+        document.getElementById('chat-input-area').classList.remove('hidden');
+        document.getElementById('chat-customer-name').textContent = conversation.customer_name || 'عميل غير معروف';
+        document.getElementById('chat-customer-phone').textContent = '+' + conversation.phone_number;
+        
+        const msgsDiv = document.getElementById('chat-messages');
+        msgsDiv.innerHTML = '<div class="absolute inset-0 flex items-center justify-center"><div class="text-slate-500">جاري التحميل...</div></div>';
+        
+        // Check window validity
+        const statusEl = document.getElementById('chat-window-status');
+        const form = document.getElementById('chat-form');
+        const errBanner = document.getElementById('chat-error-banner');
+        
+        const lastInbound = conversation.last_inbound_timestamp ? new Date(conversation.last_inbound_timestamp).getTime() : 0;
+        const now = Date.now();
+        const isValidWindow = (now - lastInbound) <= (24 * 60 * 60 * 1000) && lastInbound > 0;
+        
+        if (isValidWindow) {
+            statusEl.textContent = 'متاح للإرسال (نافذة 24 ساعة)';
+            statusEl.className = 'text-xs px-2 py-1 rounded bg-green-900/30 text-green-400';
+            form.querySelector('textarea').disabled = false;
+            form.querySelector('button').disabled = false;
+            errBanner.classList.add('hidden');
+        } else {
+            statusEl.textContent = 'مغلق (انتهت نافذة 24 ساعة)';
+            statusEl.className = 'text-xs px-2 py-1 rounded bg-red-900/30 text-red-400';
+            form.querySelector('textarea').disabled = true;
+            form.querySelector('button').disabled = true;
+            errBanner.classList.remove('hidden');
+            document.getElementById('chat-error-text').textContent = 'لا يمكنك إرسال رسالة حرة. يجب أن يرسل العميل رسالة أولاً لفتح نافذة 24 ساعة، أو استخدم قالب معتمد.';
+        }
+        
+        // Fetch messages
+        try {
+            const authHeaders = this.getAuthHeaders();
+            const res = await this.apiFetch(`${this.API_URL}-whatsapp?action=messages&conversationId=${conversation.id}`, {
+                headers: authHeaders
+            });
+            const data = await res.json();
+            
+            msgsDiv.innerHTML = ''; // Clear background text
+            
+            if (data.success && data.messages) {
+                data.messages.forEach(msg => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = `flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`;
+                    
+                    const bubble = document.createElement('div');
+                    bubble.className = `max-w-[85%] rounded-lg px-3 py-2 text-sm relative ${msg.direction === 'outbound' ? 'bg-[#005c4b] text-white rounded-tr-none' : 'bg-[#202c33] text-slate-200 rounded-tl-none'}`;
+                    
+                    let statusIcon = '';
+                    if (msg.direction === 'outbound') {
+                        if (msg.status === 'read') statusIcon = '<span class="text-blue-400 ml-1">✓✓</span>';
+                        else if (msg.status === 'delivered') statusIcon = '<span class="text-slate-400 ml-1">✓✓</span>';
+                        else if (msg.status === 'sent') statusIcon = '<span class="text-slate-400 ml-1">✓</span>';
+                        else if (msg.status === 'failed') statusIcon = '<span class="text-red-400 ml-1">!</span>';
+                        else statusIcon = '<span class="text-slate-500 ml-1 opacity-50">✓</span>';
+                    }
+                    
+                    const time = new Date(msg.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                    
+                    bubble.innerHTML = `
+                        <div class="whitespace-pre-wrap break-words">${this.escapeHtml(msg.body)}</div>
+                        <div class="text-[10px] text-right mt-1 opacity-70 flex justify-end items-center gap-1">
+                            ${time} ${statusIcon}
+                        </div>
+                    `;
+                    
+                    wrapper.appendChild(bubble);
+                    msgsDiv.appendChild(wrapper);
+                });
+                
+                // Scroll to bottom
+                msgsDiv.scrollTop = msgsDiv.scrollHeight;
+            }
+        } catch (e) {
+            msgsDiv.innerHTML = '<div class="text-center text-red-400 mt-4">فشل تحميل الرسائل.</div>';
+        }
+        
+        // Bind form
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const textInput = document.getElementById('chat-input');
+            const text = textInput.value;
+            if (!text || text.trim() === '') return;
+            
+            const btn = document.getElementById('chat-send-btn');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '...';
+            btn.disabled = true;
+            textInput.disabled = true;
+            
+            try {
+                const res = await this.apiFetch(`${this.API_URL}-whatsapp?action=send`, {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, this.getAuthHeaders()),
+                    body: JSON.stringify({ conversationId: conversation.id, text: text })
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    textInput.value = '';
+                    this.openWhatsAppChat(conversation); // Reload chat safely
+                } else {
+                    errBanner.classList.remove('hidden');
+                    document.getElementById('chat-error-text').textContent = 'فشل الإرسال: ' + (data.message || data.error || 'Unknown error');
+                }
+            } catch (err) {
+                errBanner.classList.remove('hidden');
+                document.getElementById('chat-error-text').textContent = 'خطأ في الشبكة.';
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                textInput.disabled = false;
+                textInput.focus();
+            }
+        };
+        
+        // Enter to send
+        document.getElementById('chat-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                form.dispatchEvent(new Event('submit'));
             }
         });
     }
