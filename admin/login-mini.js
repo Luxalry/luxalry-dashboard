@@ -1,5 +1,5 @@
-const API_URL = 'https://luxalry-api.vercel.app/api/admin';
-const ACCESS_API_URL = 'https://luxalry-api.vercel.app/api/access';
+const API_URL = 'https://api.luxalry.ma/api/admin';
+const ACCESS_API_URL = 'https://api.luxalry.ma/api/access';
 
 // Check if already logged in
 if (localStorage.getItem('admin_token') || sessionStorage.getItem('escalation_token')) {
