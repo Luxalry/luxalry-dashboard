@@ -1,5 +1,10 @@
-const API_URL = 'https://api.luxalry.ma/api/admin';
-const ACCESS_API_URL = 'https://api.luxalry.ma/api/access';
+if (!window.APP_CONFIG || !window.APP_CONFIG.API_BASE_URL) {
+    console.error('CRITICAL ERROR: window.APP_CONFIG.API_BASE_URL is missing.');
+    document.body.innerHTML = '<div style="color:red; text-align:center; padding:50px; font-family:sans-serif;">System Configuration Error: Missing API Base URL.</div>';
+    throw new Error('Missing API_BASE_URL');
+}
+const API_URL = window.APP_CONFIG.API_BASE_URL + '/api/admin';
+const ACCESS_API_URL = window.APP_CONFIG.API_BASE_URL + '/api/access';
 
 // Check if already logged in
 if (localStorage.getItem('admin_token') || sessionStorage.getItem('escalation_token')) {
