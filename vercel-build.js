@@ -7,7 +7,7 @@ const JS_FILES = [
     './admin/login-mini.js'
 ];
 
-const API_BASE_URL = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.PUBLIC_API_BASE_URL || 'https://luxalry-api.vercel.app'; // Default API URL if not set in environment
 
 // إعدادات التعتيم (عالية الأداء - High Performance)
 const obfuscationOptions = {
