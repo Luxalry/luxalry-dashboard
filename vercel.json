@@ -12,6 +12,10 @@
   ],
 
   "rewrites": [
+    { "source": "/admin/dashboard-mini.js", "destination": "/dist/admin/dashboard-mini.js" },
+    { "source": "/admin/login-mini.js", "destination": "/dist/admin/login-mini.js" },
+    { "source": "/admin/config.js", "destination": "/dist/admin/config.js" },
+    { "source": "/assets/css/style-mini.css", "destination": "/dist/assets/css/style-mini.css" },
     { "source": "/admin/login",     "destination": "/admin/login.html" },
     { "source": "/admin/dashboard", "destination": "/admin/dashboard.html" },
     { "source": "/404",             "destination": "/404.html" },
@@ -38,5 +42,3 @@
     }
   ]
 }
-
-
