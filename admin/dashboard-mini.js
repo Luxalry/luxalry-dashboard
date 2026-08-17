@@ -32,7 +32,7 @@ class AdminDashboard {
             qualification: null
         };
 
-        this.API_URL = 'https://luxalry-api.vercel.app/api/admin';
+        this.API_URL = 'https://api.luxalry.ma/api/admin';
         // Dermossence: no product lookup needed
 
         this.init();
