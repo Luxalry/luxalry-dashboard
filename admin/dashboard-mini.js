@@ -274,9 +274,8 @@ class AdminDashboard {
                 if (endDate) url.searchParams.append('endDate', endDate);
             }
 
-            const response = await fetch(url.toString(), {
-                method: 'GET',
-                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders)
+            const response = await this.apiFetch(url.toString(), {
+                method: 'GET'
             });
 
             if (response.ok) {
